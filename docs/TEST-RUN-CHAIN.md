@@ -21,3 +21,12 @@ Run at 2026-09-12T23:24:57.478Z in round 3. Players 2QHhrwqQm9uNzYx8bgfs4AEwusLb
 | CH-23 | commit_arena by a non-authority is rejected | PASS | rejected: "Signer is not allowed to act for this account" |
 | CH-16 | ability cannot be attached in the last 30 seconds | PASS | rejected: "Trading is locked in the final seconds of the round" |
 | CH-13 | buy in the last 5 seconds is locked | PASS | rejected: "Trading is locked in the final seconds of the round" |
+
+## Ability bonuses (deterministic)
+
+Run at 2026-09-12T23:30:04.053Z, round 4.
+
+| Plan ID | Check | Result | Observed |
+|---|---|---|---|
+| CH-19 | Double Profit bonus | PASS | profit 1.104787 USD, bonus 1.104787 (expected 1.104787), balance delta 1.104787, tx 3ubUoksDHpZqbwavzgrX95KEe7n8wz5MuCwf6hbCaT9vHEPDg2jmNv11x1f7xxPAN5oeTTVW4CjzBwq37UQScEY5 |
+| CH-19 | Protect Loss bonus | PASS | profit -1.862707 USD, bonus 1.862707 (expected 1.862707), balance delta 1.862707, tx 5tZKJEm6y7Ag5FNq1rw1h73f4iZigQbUAjyctJGeCwtivzPt7KXYx74gybH6g74mX4YEVENFxKPW9DxbZcnLie72 |
