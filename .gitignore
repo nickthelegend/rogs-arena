@@ -36,3 +36,19 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Rust / Anchor
+target/
+.anchor/
+test-ledger/
+**/*.rs.bk
+
+# Keys and secrets (keypairs live in ~/.config/solana, never in the repo)
+keys/
+*-keypair.json
+.env*
+!.env.example
+!**/.env.example
+
+# Deploy tooling
+.railway

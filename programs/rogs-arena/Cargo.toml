@@ -1,0 +1,32 @@
+[package]
+name = "rogs-arena"
+version = "0.1.0"
+description = "Rogs Arena: BTC 5-minute social trading rounds on MagicBlock Ephemeral Rollups"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "rogs_arena"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+ephemeral-rollups-sdk = { version = "0.17.0", features = ["anchor-compat", "vrf", "crank"] }
+session-keys = { version = "3.1.1", features = ["no-entrypoint"] }
+bytemuck = { version = "1.14", features = ["derive", "min_const_generics"] }
+# Crank scheduling is serialized directly (same crate the SDK uses) to keep CPI lifetimes simple.
+magicblock-magic-program-api = { version = "0.10.1", default-features = false }
+bincode = "1.3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
