@@ -314,7 +314,7 @@ rogs/
   - *Verified 05:15 IST: the crank resolved round 1 and opened round 2 one second after end_ts, with no keeper process running (packages/arena-sdk/scripts/watch-crank.ts).*
 - **P1.07** `IN PROGRESS` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
 - **P1.08** `DONE` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
-  - *commit_player verified 05:16 IST: the base-layer Player account shows the committed trades and balance. commit_arena is compiled but not exercised yet (keeper runs it every 12 rounds).*
+  - *commit_player verified 05:16 IST: the base-layer Player account shows the committed trades and balance. commit_arena verified 05:24 IST: the ER commit (158ms) moved the base-layer Arena from round 0 with 0 trades to round 2 with 6 trades and 1 commit, still owned by the delegation program (docs/E2E-RUN.md; packages/arena-sdk/scripts/commit-arena.ts).*
 - **P1.09** `DONE` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
   - *Done 04:32 IST: `cargo test -p rogs-arena --lib` gives 22 passed / 0 failed. Covers FPMM vectors, 1,000 randomized solvency sequences, ability caps, the calm-pulse bpm rule, cheers, stats/badges, round alignment, and oracle decode plus rejections.*
   - FPMM: buy→sell round-trip never profits (fee>0), buy shares monotonic in amount, sell out ≤ collateral, invariant `(Y*N) >= k` after every op, zero/overflow guards.
