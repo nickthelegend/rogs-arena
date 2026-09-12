@@ -13,7 +13,8 @@ pub const MAX_ROUND_SECONDS: i64 = 3_600;
 pub const MIN_ROUND_LEAD_SECONDS: i64 = 60;
 /// No buys, sells or ability attachments in the last seconds of a round.
 pub const TRADE_LOCK_SECONDS: i64 = 5;
-pub const MAX_PRICE_AGE_SECONDS: i64 = 30;
+/// The BTC/USD feed updates every ~50ms on devnet ERs; 10s tolerates a stalled pusher briefly.
+pub const MAX_PRICE_AGE_SECONDS: i64 = 10;
 /// Tolerated clock skew between the oracle publish time and the ER clock.
 pub const MAX_PRICE_FUTURE_SECONDS: i64 = 5;
 

@@ -766,8 +766,9 @@ pub mod rogs_arena {
         .map_err(|_| error!(ArenaError::InvalidConfig))?;
         let schedule = Instruction {
             program_id: MAGIC_PROGRAM_ID,
+            // Account 0 is the signing task authority; the rest are the accounts
+            // the scheduled instruction touches.
             accounts: vec![
-                AccountMeta::new(ctx.accounts.authority.key(), true),
                 AccountMeta::new(ctx.accounts.authority.key(), true),
                 AccountMeta::new(ctx.accounts.arena.key(), false),
                 AccountMeta::new_readonly(ctx.accounts.price_feed.key(), false),

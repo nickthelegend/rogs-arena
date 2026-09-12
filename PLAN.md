@@ -279,10 +279,10 @@ rogs/
 - **P0.01** `DONE` — Fund the dedicated devnet deployer `Ens1TxKQ…` (10 SOL, verified).
 - **P0.02** `DONE` — Verify MongoDB Atlas reachability (ping ok; empty cluster).
 - **P0.03** `DONE` — Verify Vercel + Railway CLI logins.
-- **P0.04** `NOT STARTED` (P0) — Promote `rizz-club/*` (including dotfiles) to the repo root `rogs/`, then remove the empty `rizz-club/` dir.
+- **P0.04** `DONE` (P0) — Promote `rizz-club/*` (including dotfiles) to the repo root `rogs/`, then remove the empty `rizz-club/` dir.
   - *Accept:* `rogs/apps/web/package.json` exists and `rogs/rizz-club` is gone.
   - Wait until the audit agents that read `rizz-club/` paths have finished.
-- **P0.05** `NOT STARTED` (P0) — `git init`, then commit the untouched original as `chore: import rizz-club baseline`.
+- **P0.05** `DONE` (P0) — `git init`, then commit the untouched original as `chore: import rizz-club baseline`.
   - The `.gitignore` must add `target/`, `test-ledger/`, `.anchor/`, `*.keypair.json`, `keys/`, `.env*` (except `.env.example`), `.vercel`, `.railway`.
   - *Accept:* `git log` shows the baseline commit and `git status` is clean.
 - **P0.06** `NOT STARTED` (P0) — Rename the brand (no component deletions):
@@ -291,28 +291,28 @@ rogs/
   - User-visible "Rizz"/"Rizz Club" → "Rogs Arena"; `<title>`/metadata in `app/layout.tsx`.
   - README rewrite in P9.
   - *Accept:* `grep -ri "rizz" apps packages --include=*.ts* | grep -v node_modules` returns only intentional credits.
-- **P0.07** `NOT STARTED` (P0) — Create GitHub `nickthelegend/rogs-arena` **private** and push.
+- **P0.07** `DONE` (P0) — Create GitHub `nickthelegend/rogs-arena` **private** and push.
   - *Accept:* `gh repo view` works.
-- **P0.08** `NOT STARTED` (P0) — Copy the MagicBlock skill into `rogs/.agents/skills/magicblock` so every agent can read it.
-- **P0.09** `NOT STARTED` (P0) — Merge the findings of the three audit agents (web data layer, UI seam, watcher+bot) into §4 Gap register.
+- **P0.08** `DONE` (P0) — Copy the MagicBlock skill into `rogs/.agents/skills/magicblock` so every agent can read it.
+- **P0.09** `DONE` (P0) — Merge the findings of the three audit agents (web data layer, UI seam, watcher+bot) into §4 Gap register.
 
 ### Phase 1 — On-chain program + unit tests (target: 08:00 IST)
-- **P1.01** `NOT STARTED` (P0) — Scaffold the Anchor workspace at the root:
+- **P1.01** `DONE` (P0) — Scaffold the Anchor workspace at the root:
   - `Anchor.toml` (`[programs.devnet] rogs_arena`, `[provider] wallet="~/.config/solana/rogs-deployer.json"`, cluster devnet).
   - Workspace `Cargo.toml` and `programs/rogs-arena/Cargo.toml` with the deps from §2.2.
   - Generate the program keypair with `anchor keys sync`.
   - *Accept:* `anchor build` compiles an empty `#[ephemeral] #[program]`.
-- **P1.02** `NOT STARTED` (P0) — `state.rs`: `Arena` (zero_copy, Pod structs, explicit padding), `RoundState`, `RoundSummary`, `Player`, `Position`, constants.
+- **P1.02** `DONE` (P0) — `state.rs`: `Arena` (zero_copy, Pod structs, explicit padding), `RoundState`, `RoundSummary`, `Player`, `Position`, constants.
   - *Accept:* size asserts in unit tests: `size_of::<Arena>() <= 10_000`, `Player::INIT_SPACE` matches.
-- **P1.03** `NOT STARTED` (P0) — `math.rs`: FPMM `quote_buy`, `quote_sell` (isqrt u128), `yes_price_bps`, `resolve_split`, `settle_slot` (payout/profit/bonus), all pure functions with checked arithmetic.
-- **P1.04** `NOT STARTED` (P0) — `oracle.rs`: typed `PriceUpdateV2` mirror.
+- **P1.03** `IN PROGRESS` (P0) — `math.rs`: FPMM `quote_buy`, `quote_sell` (isqrt u128), `yes_price_bps`, `resolve_split`, `settle_slot` (payout/profit/bonus), all pure functions with checked arithmetic.
+- **P1.04** `DONE` (P0) — `oracle.rs`: typed `PriceUpdateV2` mirror.
   - `read_btc_price(ai, expected_key, now)` checks owner == ORACLE_PROGRAM_ID, discriminator, feed_id == key bytes, posted_slot>0, price>0, age ≤ MAX_PRICE_AGE.
   - Returns `(price i64, decimals u32, publish_time i64)`.
-- **P1.05** `NOT STARTED` (P0) — Instructions 1–10 per §2.2 with events and errors (`error.rs`).
-- **P1.06** `NOT STARTED` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
-- **P1.07** `NOT STARTED` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
-- **P1.08** `NOT STARTED` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
-- **P1.09** `NOT STARTED` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
+- **P1.05** `IN PROGRESS` (P0) — Instructions 1–10 per §2.2 with events and errors (`error.rs`).
+- **P1.06** `IN PROGRESS` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
+- **P1.07** `IN PROGRESS` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
+- **P1.08** `IN PROGRESS` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
+- **P1.09** `IN PROGRESS` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
   - FPMM: buy→sell round-trip never profits (fee>0), buy shares monotonic in amount, sell out ≤ collateral, invariant `(Y*N) >= k` after every op, zero/overflow guards.
   - Resolve/settle: collateral conservation (house_back + claims == collateral) for YES/NO/VOID across randomized sequences (deterministic seed loop, 1,000 cases).
   - Abilities: double cap at 10, protect cap at 10, calm requires bpm<120 and freshness (bpm 119 pays, 120 doesn't, stale doesn't), cheers pending only on win.
@@ -320,14 +320,15 @@ rogs/
   - Oracle decode: good account, wrong disc, wrong owner, wrong key, posted_slot 0, stale, negative price.
   - Cheers selection: excludes winner, unique, ≤10, deterministic per randomness, handles <10 candidates.
   - Round alignment: `end_ts` on a 5-min boundary ≥60s away.
-- **P1.10** `NOT STARTED` (P0) — `anchor build` produces IDL `target/idl/rogs_arena.json` + types. Record the `.so` size.
+- **P1.10** `DONE` (P0) — `anchor build` produces IDL `target/idl/rogs_arena.json` + types. Record the `.so` size.
+  - *Done 04:30 IST:* build is clean on Anchor 0.32.1 + ER SDK 0.17.0 (anchor-compat, vrf, crank) + session-keys 3.1.1. Needed `cargo update -p anchor-lang@1.2.0 --precise 0.32.1`, because session-keys had resolved to anchor-lang 1.2.0. Unit tests: 21/22 passing; the failure is a wrong hand-computed vector (P1.09).
   - *Accept:* build succeeds; `.so` < 900 KB.
 
 ### Phase 2 — Devnet deploy, bootstrap, real E2E (target: 09:30 IST)
-- **P2.01** `NOT STARTED` (P0) — Confirm the ER validator identity: `curl devnet-as getIdentity`. Record it in §2.7 and `packages/arena-sdk/src/constants.ts`.
+- **P2.01** `DONE` (P0) — Confirm the ER validator identity: `curl devnet-as getIdentity`. Record it in §2.7 and `packages/arena-sdk/src/constants.ts`.
 - **P2.02** `NOT STARTED` (P0) — `anchor deploy --provider.cluster devnet` with `rogs-deployer`.
   - *Accept:* `solana program show <PROGRAM_ID> --url devnet` shows authority `Ens1…`.
-- **P2.03** `NOT STARTED` (P0) — Generate the operational keypairs in `~/.config/solana/rogs-{keeper,faucet}.json` and fund them from the deployer: keeper 0.5 SOL, faucet 2 SOL.
+- **P2.03** `DONE` (P0) — Generate the operational keypairs in `~/.config/solana/rogs-{keeper,faucet}.json` and fund them from the deployer: keeper 0.5 SOL, faucet 2 SOL.
 - **P2.04** `NOT STARTED` (P0) — `scripts/bootstrap-arena.ts`: `initialize_arena` (oracle 71wtT…, 300s, 200 USD liquidity, 100 bps, treasury 1,000,000 USD) → `delegate_arena` (validator from P2.01) → wait for router `isDelegated` → `roll_round` on ER (opens round 1) → `schedule_round_crank` (interval 2000ms, iterations 200,000).
   - *Accept:* every signature is printed, and the Arena on ER has `current.status==1` with a strike ≈ live BTC.
 - **P2.05** `NOT STARTED` (P0) — `scripts/e2e-devnet.ts` (real, repeatable). With two fresh players funded by the deployer:
@@ -356,7 +357,7 @@ rogs/
 - **P3.07** `NOT STARTED` (P0) — `events.ts`: `parseArenaEvents(logs)` via the Anchor `EventParser`.
 
 ### Phase 4 — Railway service `apps/arena` (target: 11:00 IST)
-- **P4.01** `NOT STARTED` (P0) — Scaffold the Bun app (`@apps/arena`).
+- **P4.01** `IN PROGRESS` (P0) — Scaffold the Bun app (`@apps/arena`).
   - `src/env.ts` (zod; fail fast on missing vars).
   - `src/db.ts` (MongoClient singleton, collections, `createIndexes` at boot).
   - `railway.json` (RAILPACK, start `bun run --filter @apps/arena start`, healthcheck `/health`).
@@ -374,7 +375,7 @@ rogs/
 - **P4.09** `NOT STARTED` (P2) — Bots: `BOTS_ENABLED` with N keypairs funded by the faucet wallet; real ER trades every 20–60s; `users.isBot=true`.
 
 ### Phase 5 — Web backend swap, keep every component (target: 13:00 IST)
-- **P5.01** `NOT STARTED` (P0) — Dependencies:
+- **P5.01** `IN PROGRESS` (P0) — Dependencies:
   - Remove `@privy-io/*`, `wagmi`, `viem`, `@somnia-chain/markets-sdk`, `firebase`, `drizzle-orm`, `drizzle-zod`, `drizzle-kit`, `postgres`.
   - Add `@solana/web3.js`, `@solana/wallet-adapter-{base,react,react-ui,wallets}`, `@rogs/arena-sdk`, `bs58`, `tweetnacl`, `buffer`.
   - Delete `db/`, `drizzle/`, `drizzle.config.ts`, `lib/{privy,wagmi,viem,firebase,dreamdex,admin-tusdc}.ts`, `app/api/**`, `services/**` (backend only).
@@ -490,7 +491,15 @@ rogs/
 | G-53 | `components/preload-gate.tsx:47` special-cases a `/preload` route that doesn't exist; preload does one-off Firebase gets (`lib/preload.ts:9`) | minor | P5.18 (preload from the Railway snapshot) |
 | G-54 | The leaderboard is computed entirely client-side from spoofable Firebase data: `hooks/use-leaderboard.ts:21-51`, `lib/leaderboard.ts:210-324` | major | P4.02/P5.10 (inputs from indexed on-chain events; `lib/leaderboard.ts` math kept) |
 | G-55 | Display names exist only in localStorage: `lib/display-name.ts:61-78` | minor | P5.12 (profile API) |
-| G-56 | *(pending)* findings from the UI-seam and watcher+bot audit agents | — | P0.09 |
+| G-56 | Wallet addresses are lowercased all over the code, which corrupts case-sensitive base58 keys: `packages/shared/src/firebase-path.ts:19,23`, `lib/display-name.ts:39,58,66`, `lib/leaderboard.ts:220,263`, `hooks/use-market-closes.ts:30`, `lib/market-closes.ts:40`, `components/section-chat.tsx:41-42`, `lib/ability-payout.ts:79,84`, `lib/avatar.ts:6`, `hooks/use-current-market.ts:64` | dealbreaker | P5 web agent C1 item 7 |
+| G-57 | Every client trims chat to the newest 50 by deleting the oldest messages, including other people's: `hooks/use-chat.ts:38-50`, `apps/bot/src/chat.ts:175-187` | major | P4.04 (server-side cap), P5.10 |
+| G-58 | `bpm &&` renders a stray "0" when bpm is 0: `features/dynamic-island/pane-trading-zone.tsx:112` | minor | P5 web agent C1 item 10 |
+| G-59 | No maximum trade amount or balance check before trading: `features/dynamic-island/pane-trading-zone.tsx:97-99` | major | on-chain MIN/MAX_TRADE + InsufficientBalance (P1.05); UI surfaces the error (P5.06) |
+| G-60 | Badges ignore wins held to expiry, and a break-even take-profit counts as a win: `hooks/use-trading.ts:296-303` | major | on-chain stats in settle (P1.03), P5.11 |
+| G-61 | Faucet buttons render before balances load; SDK clients are never closed (`components/live-tabname.tsx:20`, `features/chart-btc/index.tsx:115`); the leaderboard shows 0 PnL while prices load (`lib/leaderboard.ts:165`) | minor | P5.05, P5.08, P5.10 |
+| G-62 | About page shows template text and a hard-coded version: `features/about/index.tsx:20,26`; `components/inventory.tsx` is dead and references images that don't exist | minor | P5.13 |
+| G-63 | The display font is "ABC Gravity Trial", a trial license: `app/layout.tsx:8-11`, `styles/globals.css:17` | minor (legal) | P9.01 note; owner decision |
+| G-64 | Watcher crash on an unhandled flush rejection, wrong bot close records, bots trimming real users' chat, and plaintext EVM keys in `apps/bot/.env`: all Somnia-only apps | closed by removal | apps/bot + apps/watcher removed 2026-09-13; replaced by apps/arena (Phase 4) |
 
 ---
 

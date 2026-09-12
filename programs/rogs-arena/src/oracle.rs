@@ -59,6 +59,10 @@ pub fn decode_price(
     let message = update.price_message;
     // The oracle stores each feed under an account whose key equals its feed id.
     require!(message.feed_id == key.to_bytes(), ArenaError::OracleInvalid);
+    require!(
+        matches!(update.verification_level, VerificationLevel::Full),
+        ArenaError::OracleInvalid
+    );
     // Initialisation writes a zero placeholder with posted_slot 0; a republisher update never does.
     require!(update.posted_slot > 0, ArenaError::OracleInvalid);
     require!(message.price > 0, ArenaError::OracleInvalid);
@@ -159,5 +163,12 @@ mod tests {
         assert!(decode_price(&key, &ORACLE_PROGRAM_ID, &key, &good, 994, 30).is_err());
 
         assert!(decode_price(&key, &ORACLE_PROGRAM_ID, &key, &good[..20], 1_000, 30).is_err());
+
+        // VerificationLevel::Partial { num_signatures: 3 } shifts the layout by one byte.
+        let mut partial = PRICE_UPDATE_DISCRIMINATOR.to_vec();
+        partial.extend_from_slice(&good[8..40]);
+        partial.extend_from_slice(&[0, 3]);
+        partial.extend_from_slice(&good[41..]);
+        assert!(decode_price(&key, &ORACLE_PROGRAM_ID, &key, &partial, 1_000, 30).is_err());
     }
 }

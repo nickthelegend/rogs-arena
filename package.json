@@ -1,5 +1,5 @@
 {
-  "name": "rizz",
+  "name": "rogs-arena",
   "private": true,
   "scripts": {
     "build": "bun run scripts/railway-build.ts",
@@ -26,8 +26,5 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ],
-  "dependencies": {
-    "viem": "^2.56.3"
-  }
+  ]
 }

@@ -327,11 +327,11 @@ mod tests {
         let quote = quote_buy(L, L, 5 * USD, 100).unwrap();
         assert_eq!(quote.fee, 50_000);
         assert_eq!(quote.net, 4_950_000);
-        // k = 4e16, other' = 204_950_000 -> kept = ceil(4e16 / 204_950_000) = 195_169_553
+        // k = 4e16, other' = 204_950_000 -> 4e16 / 204_950_000 = 195_169_553.55, so kept = ceil = 195_169_554
         assert_eq!(quote.pool_other, 204_950_000);
-        assert_eq!(quote.pool_bought, 195_169_553);
-        // shares = 204_950_000 - 195_169_553
-        assert_eq!(quote.shares, 9_780_447);
+        assert_eq!(quote.pool_bought, 195_169_554);
+        // shares = 204_950_000 - 195_169_554
+        assert_eq!(quote.shares, 9_780_446);
         // YES price moves from 50.00% to 51.22%.
         assert_eq!(yes_price_bps(quote.pool_bought, quote.pool_other), 5_122);
     }
@@ -566,7 +566,8 @@ mod tests {
         player.calm_wins = 69;
         player.badges = badges_for(&player);
         assert_eq!(player.badges & (BADGE_TRADE_MASTER | BADGE_DAY_TRADER | BADGE_STEAL_HEART), 0);
-        apply_trade_stats(&mut player, OUTCOME_YES, USD, player.day_index * SECONDS_PER_DAY + 5);
+        let same_day = player.day_index * SECONDS_PER_DAY + 5;
+        apply_trade_stats(&mut player, OUTCOME_YES, USD, same_day);
         apply_settle_stats(&mut player, &win);
         assert_ne!(player.badges & BADGE_TRADE_MASTER, 0);
         assert_ne!(player.badges & BADGE_DAY_TRADER, 0);
