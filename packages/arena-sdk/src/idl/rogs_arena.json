@@ -1,0 +1,2829 @@
+{
+  "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q",
+  "metadata": {
+    "name": "rogs_arena",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Rogs Arena: BTC 5-minute social trading rounds on MagicBlock Ephemeral Rollups"
+  },
+  "instructions": [
+    {
+      "name": "attach_ability",
+      "discriminator": [
+        44,
+        238,
+        61,
+        152,
+        36,
+        192,
+        139,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "ability",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "buy",
+      "discriminator": [
+        102,
+        6,
+        61,
+        18,
+        1,
+        218,
+        235,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_shares",
+          "type": "u64"
+        },
+        {
+          "name": "ability",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "cheers_callback",
+      "docs": [
+        "VRF callback: pays CHEERS_AMOUNT to up to ten randomly chosen candidates."
+      ],
+      "discriminator": [
+        183,
+        47,
+        144,
+        95,
+        74,
+        115,
+        230,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
+            "the callback was issued by the VRF program for this program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "winner.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "claim_chips",
+      "discriminator": [
+        145,
+        205,
+        154,
+        242,
+        241,
+        150,
+        215,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_arena",
+      "docs": [
+        "Commits the arena snapshot from the ER back to Solana (stays delegated)."
+      ],
+      "discriminator": [
+        219,
+        190,
+        95,
+        171,
+        235,
+        130,
+        112,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_player",
+      "docs": [
+        "Commits the player's account to Solana and keeps playing on the ER."
+      ],
+      "discriminator": [
+        240,
+        196,
+        120,
+        93,
+        216,
+        101,
+        42,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delegate_arena",
+      "discriminator": [
+        216,
+        55,
+        214,
+        212,
+        195,
+        162,
+        39,
+        100
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buffer_arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                254,
+                100,
+                243,
+                32,
+                79,
+                16,
+                81,
+                95,
+                101,
+                68,
+                249,
+                10,
+                141,
+                166,
+                103,
+                28,
+                69,
+                80,
+                111,
+                239,
+                30,
+                4,
+                220,
+                196,
+                106,
+                100,
+                22,
+                194,
+                26,
+                68,
+                60,
+                186
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delegate_player",
+      "discriminator": [
+        235,
+        159,
+        245,
+        102,
+        161,
+        199,
+        254,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buffer_player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                254,
+                100,
+                243,
+                32,
+                79,
+                16,
+                81,
+                95,
+                101,
+                68,
+                249,
+                10,
+                141,
+                166,
+                103,
+                28,
+                69,
+                80,
+                111,
+                239,
+                30,
+                4,
+                220,
+                196,
+                106,
+                100,
+                22,
+                194,
+                26,
+                68,
+                60,
+                186
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_program",
+          "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fund_treasury",
+      "docs": [
+        "Adds house chips (devnet play money) and records it on-chain."
+      ],
+      "discriminator": [
+        71,
+        154,
+        45,
+        220,
+        206,
+        32,
+        174,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_player",
+      "discriminator": [
+        114,
+        27,
+        219,
+        144,
+        50,
+        15,
+        228,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_arena",
+      "discriminator": [
+        11,
+        37,
+        221,
+        1,
+        205,
+        120,
+        25,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "InitializeArenaArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "report_heart",
+      "discriminator": [
+        226,
+        76,
+        75,
+        1,
+        55,
+        28,
+        132,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "bpm",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "request_cheers",
+      "docs": [
+        "Asks MagicBlock VRF to pick up to ten recent traders for a won Cheers card."
+      ],
+      "discriminator": [
+        157,
+        37,
+        143,
+        188,
+        1,
+        121,
+        77,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "winner.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "caller_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "reset_cheers",
+      "docs": [
+        "Frees a cheers request whose VRF callback never arrived so it can be retried."
+      ],
+      "discriminator": [
+        54,
+        3,
+        98,
+        123,
+        109,
+        131,
+        118,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "roll_round",
+      "docs": [
+        "Resolves the finished round with the oracle price and opens the next one.",
+        "A no-op while the current round is still running, so the crank can tick often."
+      ],
+      "discriminator": [
+        171,
+        253,
+        218,
+        190,
+        227,
+        154,
+        197,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "price_feed"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "schedule_round_crank",
+      "docs": [
+        "Schedules `roll_round` on the ER through the MagicBlock crank scheduler."
+      ],
+      "discriminator": [
+        156,
+        56,
+        70,
+        180,
+        249,
+        136,
+        58,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "price_feed"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "program",
+          "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q"
+        }
+      ],
+      "args": [
+        {
+          "name": "task_id",
+          "type": "i64"
+        },
+        {
+          "name": "interval_ms",
+          "type": "i64"
+        },
+        {
+          "name": "iterations",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "sell",
+      "discriminator": [
+        51,
+        230,
+        133,
+        164,
+        1,
+        127,
+        131,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "outcome",
+          "type": "u8"
+        },
+        {
+          "name": "shares",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "settle_player",
+      "docs": [
+        "Settles every position whose round has resolved. Idempotent."
+      ],
+      "discriminator": [
+        163,
+        18,
+        55,
+        160,
+        79,
+        20,
+        108,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.owner",
+                "account": "Player"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "undelegate_player",
+      "docs": [
+        "Commits the player's account and returns it to Solana."
+      ],
+      "discriminator": [
+        230,
+        242,
+        176,
+        199,
+        120,
+        26,
+        119,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Arena",
+      "discriminator": [
+        243,
+        215,
+        44,
+        44,
+        231,
+        211,
+        232,
+        168
+      ]
+    },
+    {
+      "name": "Player",
+      "discriminator": [
+        205,
+        222,
+        112,
+        7,
+        165,
+        155,
+        206,
+        218
+      ]
+    },
+    {
+      "name": "SessionTokenV2",
+      "discriminator": [
+        178,
+        3,
+        85,
+        254,
+        13,
+        116,
+        128,
+        41
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AbilityAttached",
+      "discriminator": [
+        208,
+        241,
+        134,
+        122,
+        10,
+        124,
+        207,
+        105
+      ]
+    },
+    {
+      "name": "ArenaPaused",
+      "discriminator": [
+        142,
+        227,
+        167,
+        147,
+        27,
+        20,
+        199,
+        166
+      ]
+    },
+    {
+      "name": "CheersPaid",
+      "discriminator": [
+        230,
+        238,
+        94,
+        9,
+        54,
+        111,
+        118,
+        221
+      ]
+    },
+    {
+      "name": "CheersRequested",
+      "discriminator": [
+        253,
+        150,
+        121,
+        123,
+        108,
+        83,
+        122,
+        156
+      ]
+    },
+    {
+      "name": "CheersReset",
+      "discriminator": [
+        75,
+        224,
+        87,
+        188,
+        165,
+        71,
+        6,
+        135
+      ]
+    },
+    {
+      "name": "ChipsClaimed",
+      "discriminator": [
+        98,
+        9,
+        227,
+        123,
+        23,
+        147,
+        88,
+        54
+      ]
+    },
+    {
+      "name": "HeartReported",
+      "discriminator": [
+        25,
+        31,
+        49,
+        40,
+        39,
+        230,
+        83,
+        70
+      ]
+    },
+    {
+      "name": "PositionSettled",
+      "discriminator": [
+        75,
+        100,
+        92,
+        189,
+        245,
+        116,
+        252,
+        221
+      ]
+    },
+    {
+      "name": "RoundOpened",
+      "discriminator": [
+        99,
+        173,
+        228,
+        72,
+        142,
+        57,
+        109,
+        178
+      ]
+    },
+    {
+      "name": "RoundResolved",
+      "discriminator": [
+        204,
+        146,
+        253,
+        187,
+        8,
+        61,
+        75,
+        29
+      ]
+    },
+    {
+      "name": "TradeExecuted",
+      "discriminator": [
+        41,
+        110,
+        64,
+        129,
+        60,
+        79,
+        179,
+        80
+      ]
+    },
+    {
+      "name": "TreasuryFunded",
+      "discriminator": [
+        172,
+        66,
+        241,
+        101,
+        216,
+        219,
+        147,
+        130
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Signer is not allowed to act for this account"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidConfig",
+      "msg": "Invalid arena configuration"
+    },
+    {
+      "code": 6002,
+      "name": "NotJoined",
+      "msg": "Player has not joined the arena yet"
+    },
+    {
+      "code": 6003,
+      "name": "RoundNotOpen",
+      "msg": "The round is not open for trading"
+    },
+    {
+      "code": 6004,
+      "name": "TradingLocked",
+      "msg": "Trading is locked in the final seconds of the round"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidOutcome",
+      "msg": "Invalid outcome"
+    },
+    {
+      "code": 6006,
+      "name": "AmountTooSmall",
+      "msg": "Trade amount is below the minimum"
+    },
+    {
+      "code": 6007,
+      "name": "AmountTooLarge",
+      "msg": "Trade amount is above the maximum"
+    },
+    {
+      "code": 6008,
+      "name": "InsufficientBalance",
+      "msg": "Not enough chips"
+    },
+    {
+      "code": 6009,
+      "name": "SlippageExceeded",
+      "msg": "Price moved beyond the allowed slippage"
+    },
+    {
+      "code": 6010,
+      "name": "NoPositionSlot",
+      "msg": "All position slots are in use; settle finished rounds first"
+    },
+    {
+      "code": 6011,
+      "name": "NoPosition",
+      "msg": "No position in the current round"
+    },
+    {
+      "code": 6012,
+      "name": "NothingToSell",
+      "msg": "Not enough shares to sell"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidAbility",
+      "msg": "Invalid ability card"
+    },
+    {
+      "code": 6014,
+      "name": "AbilityAlreadySet",
+      "msg": "An ability card is already attached to this position"
+    },
+    {
+      "code": 6015,
+      "name": "OracleMismatch",
+      "msg": "Price feed does not match the arena oracle"
+    },
+    {
+      "code": 6016,
+      "name": "OracleOwner",
+      "msg": "Price feed is not owned by the MagicBlock oracle program"
+    },
+    {
+      "code": 6017,
+      "name": "OracleInvalid",
+      "msg": "Price feed account is malformed"
+    },
+    {
+      "code": 6018,
+      "name": "OracleStale",
+      "msg": "Price feed is stale"
+    },
+    {
+      "code": 6019,
+      "name": "TreasuryInsufficient",
+      "msg": "House treasury is too low"
+    },
+    {
+      "code": 6020,
+      "name": "FaucetCooldown",
+      "msg": "Faucet is cooling down"
+    },
+    {
+      "code": 6021,
+      "name": "FaucetBalanceTooHigh",
+      "msg": "Balance is too high to use the faucet"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidHeartRate",
+      "msg": "Heart rate is out of range"
+    },
+    {
+      "code": 6023,
+      "name": "NoCheersPending",
+      "msg": "No cheers payout is pending"
+    },
+    {
+      "code": 6024,
+      "name": "CheersInflight",
+      "msg": "A cheers randomness request is already in flight"
+    },
+    {
+      "code": 6025,
+      "name": "NoCheersInflight",
+      "msg": "No cheers randomness request is in flight"
+    },
+    {
+      "code": 6026,
+      "name": "CheersNotTimedOut",
+      "msg": "The cheers request has not timed out yet"
+    },
+    {
+      "code": 6027,
+      "name": "CheersCandidateInvalid",
+      "msg": "Invalid cheers candidate"
+    },
+    {
+      "code": 6028,
+      "name": "TooManyCandidates",
+      "msg": "Too many cheers candidates"
+    },
+    {
+      "code": 6029,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidQueue",
+      "msg": "Invalid VRF queue"
+    }
+  ],
+  "types": [
+    {
+      "name": "AbilityAttached",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "ability",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Arena",
+      "docs": [
+        "Global arena state. Delegated to the ephemeral rollup."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_feed",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "liquidity",
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "House chips: seeds round liquidity, collects fees, pays bonuses."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claims_outstanding",
+            "docs": [
+              "Winning shares still owed to players across resolved rounds."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_volume",
+            "type": "u64"
+          },
+          {
+            "name": "total_trades",
+            "type": "u64"
+          },
+          {
+            "name": "total_players",
+            "type": "u64"
+          },
+          {
+            "name": "crank_task_id",
+            "type": "i64"
+          },
+          {
+            "name": "last_roll_ts",
+            "type": "i64"
+          },
+          {
+            "name": "history_head",
+            "type": "u64"
+          },
+          {
+            "name": "history_len",
+            "type": "u64"
+          },
+          {
+            "name": "recent_head",
+            "type": "u64"
+          },
+          {
+            "name": "commits",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "current",
+            "type": {
+              "defined": {
+                "name": "RoundState"
+              }
+            }
+          },
+          {
+            "name": "history",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "RoundSummary"
+                  }
+                },
+                64
+              ]
+            }
+          },
+          {
+            "name": "recent",
+            "type": {
+              "array": [
+                "pubkey",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArenaPaused",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "u64"
+          },
+          {
+            "name": "needed",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CheersPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipients",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "amount_each",
+            "type": "u64"
+          },
+          {
+            "name": "randomness",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CheersRequested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "candidates",
+            "type": "u8"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CheersReset",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ChipsClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "first",
+            "type": "bool"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HeartReported",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "bpm",
+            "type": "u16"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeArenaArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oracle_feed",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "liquidity",
+            "type": "u64"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_seed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Player",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "joined",
+            "type": "bool"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "positions",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Position"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "trades_total",
+            "type": "u32"
+          },
+          {
+            "name": "wins_total",
+            "type": "u32"
+          },
+          {
+            "name": "losses_total",
+            "type": "u32"
+          },
+          {
+            "name": "win_streak",
+            "type": "u16"
+          },
+          {
+            "name": "best_streak",
+            "type": "u16"
+          },
+          {
+            "name": "same_side_streak",
+            "type": "u16"
+          },
+          {
+            "name": "last_side",
+            "type": "u8"
+          },
+          {
+            "name": "calm_wins",
+            "type": "u32"
+          },
+          {
+            "name": "day_index",
+            "type": "i64"
+          },
+          {
+            "name": "day_trades",
+            "type": "u16"
+          },
+          {
+            "name": "badges",
+            "type": "u32"
+          },
+          {
+            "name": "pnl_total",
+            "type": "i64"
+          },
+          {
+            "name": "bonus_total",
+            "type": "u64"
+          },
+          {
+            "name": "volume_total",
+            "type": "u64"
+          },
+          {
+            "name": "heart_bpm",
+            "type": "u16"
+          },
+          {
+            "name": "heart_ts",
+            "type": "i64"
+          },
+          {
+            "name": "cheers_pending",
+            "type": "u8"
+          },
+          {
+            "name": "cheers_inflight",
+            "type": "u8"
+          },
+          {
+            "name": "cheers_requested_ts",
+            "type": "i64"
+          },
+          {
+            "name": "cheers_received",
+            "type": "u64"
+          },
+          {
+            "name": "last_faucet_ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Position",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "yes_shares",
+            "type": "u64"
+          },
+          {
+            "name": "no_shares",
+            "type": "u64"
+          },
+          {
+            "name": "cost",
+            "docs": [
+              "Gross chips spent on buys (never reduced)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "proceeds",
+            "docs": [
+              "Net chips received from sells."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "basis_yes",
+            "docs": [
+              "Remaining cost basis per side, reduced pro rata on sells."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "basis_no",
+            "type": "u64"
+          },
+          {
+            "name": "max_bpm",
+            "docs": [
+              "Highest heart rate reported while this position was live."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "heart_samples",
+            "type": "u16"
+          },
+          {
+            "name": "ability",
+            "type": "u8"
+          },
+          {
+            "name": "active",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "profit",
+            "type": "i64"
+          },
+          {
+            "name": "ability",
+            "type": "u8"
+          },
+          {
+            "name": "bonus",
+            "type": "u64"
+          },
+          {
+            "name": "calm",
+            "type": "bool"
+          },
+          {
+            "name": "cheers",
+            "type": "bool"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "strike_price",
+            "type": "i64"
+          },
+          {
+            "name": "price_expo",
+            "type": "i32"
+          },
+          {
+            "name": "liquidity",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundResolved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "strike_price",
+            "type": "i64"
+          },
+          {
+            "name": "close_price",
+            "type": "i64"
+          },
+          {
+            "name": "price_expo",
+            "type": "i32"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "yes_pool",
+            "type": "u64"
+          },
+          {
+            "name": "no_pool",
+            "type": "u64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "trades",
+            "type": "u64"
+          },
+          {
+            "name": "house_back",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundState",
+      "docs": [
+        "The live round. Layout has no implicit padding (zero-copy)."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "strike_price",
+            "type": "i64"
+          },
+          {
+            "name": "close_price",
+            "type": "i64"
+          },
+          {
+            "name": "yes_pool",
+            "type": "u64"
+          },
+          {
+            "name": "no_pool",
+            "type": "u64"
+          },
+          {
+            "name": "collateral",
+            "docs": [
+              "Chips backing the round; always equals the number of minted YES+NO sets."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "trades",
+            "type": "u64"
+          },
+          {
+            "name": "price_expo",
+            "type": "i32"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoundSummary",
+      "docs": [
+        "A resolved round kept for settlement and history."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "end_ts",
+            "type": "i64"
+          },
+          {
+            "name": "strike_price",
+            "type": "i64"
+          },
+          {
+            "name": "close_price",
+            "type": "i64"
+          },
+          {
+            "name": "yes_pool",
+            "type": "u64"
+          },
+          {
+            "name": "no_pool",
+            "type": "u64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "trades",
+            "type": "u64"
+          },
+          {
+            "name": "price_expo",
+            "type": "i32"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "_pad",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "type": "u8"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Gross chips in for buys, net chips out for sells."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "shares",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "yes_price_bps",
+            "docs": [
+              "YES probability after the trade, in basis points."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "realized_pnl",
+            "docs": [
+              "Sell proceeds minus the cost basis of the shares sold; 0 for buys."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "ability",
+            "type": "u8"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
