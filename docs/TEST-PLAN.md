@@ -53,18 +53,18 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 
 | ID | Endpoint / case | Method | Correct means | Status |
 |---|---|---|---|---|
-| API-01 | `GET /health` | H | 200 `{ok:true, mongo:true, er:true, programId:"J83q…", arena:{roundId>0, status:"open", endTs equal to the ER arena}}` (status is a string: idle/open/resolved, per docs/ARENA-API.md) | NOT RUN |
-| API-02 | `GET /api/arena` | H | 200 ArenaSnapshot; `round.roundId` equals the ER arena `current.id`; all arrays present | NOT RUN |
-| API-03 | `GET /api/rounds?limit=5` | H | ≤5 rounds newest first; each resolved one has outcome YES/NO matching the on-chain history | NOT RUN |
-| API-04 | `GET /api/trades?roundId=<n>` | H | Every `TradeExecuted` of that round; `sig` resolvable on the ER; amounts in USD | NOT RUN |
-| API-05 | `GET /api/points`, `/api/closes`, `/api/settlements`, `/api/cheers` | H | Shapes per docs/ARENA-API.md; data matches on-chain events | NOT RUN |
-| API-06 | `GET /api/chat?limit=50` | H | Ascending, ≤50, persisted across a service restart | NOT RUN |
-| API-07 | `POST /api/auth/nonce` bad wallet | H | 400 `{error}` | NOT RUN |
-| API-08 | auth verify: good signature / bad signature / reused nonce | H | token / 401 / 401 | NOT RUN |
-| API-09 | `POST /api/profile` without token; invalid name; valid | H | 401; 400; 200 ProfileDto, then `GET /api/profile/:wallet` returns it | NOT RUN |
-| API-10 | `POST /api/faucet` without token; funded wallet; unfunded wallet; repeat | H | 401; `{skipped:true}`; `{signature}` whose transfer of 0.02 SOL lands on devnet; 429 | NOT RUN |
-| API-11 | CORS | H | Vercel origin gets `access-control-allow-origin`; a foreign origin doesn't | NOT RUN |
-| API-12 | Errors | H | Unknown route → 404 JSON `{error}`; no stack traces anywhere | NOT RUN |
+| API-01 | `GET /health` | H | 200 `{ok:true, mongo:true, er:true, programId:"J83q…", arena:{roundId>0, status:"open", endTs equal to the ER arena}}` (status is a string: idle/open/resolved, per docs/ARENA-API.md) | PASS: Chrome showed ok, mongo and er all true, program J83q…, arena round 8 open with endTs 1789257000, equal to the ER Arena |
+| API-02 | `GET /api/arena` | H | 200 ArenaSnapshot; `round.roundId` equals the ER arena `current.id`; all arrays present | PASS: Chrome showed round 8 (ER current.id 8); round, recentRounds (8…1), trades, points, closes, traders, chat and cheers all present |
+| API-03 | `GET /api/rounds?limit=5` | H | ≤5 rounds newest first; each resolved one has outcome YES/NO matching the on-chain history | PASS: rounds 8…4 newest first; outcomes 7 YES, 6 NO, 5 NO, 4 YES with strike and close equal to the ER Arena history |
+| API-04 | `GET /api/trades?roundId=<n>` | H | Every `TradeExecuted` of that round; `sig` resolvable on the ER; amounts in USD | PASS: round 4 returns 6 trades, matching the on-chain trade count of 6; every sig is finalized on the ER with a Buy/Sell instruction; amounts in USD |
+| API-05 | `GET /api/points`, `/api/closes`, `/api/settlements`, `/api/cheers` | H | Shapes per docs/ARENA-API.md; data matches on-chain events | PASS: points ascending every 5s; round-4 closes show tp +1.104787 and sl -1.862707; settlements carry bonus 1.104787 and 1.862707 with sigs 3ubUoks…/5tZKJEm… (same as TEST-RUN-CHAIN); cheers 3acK2K49… randomness 4a55…2cb5 |
+| API-06 | `GET /api/chat?limit=50` | H | Ascending, ≤50, persisted across a service restart | PASS: ascending and ≤50. A message written before the Railway deploy was served after boot, so it persisted across the restart; it was a service-agent test record and has been removed |
+| API-07 | `POST /api/auth/nonce` bad wallet | H | 400 `{error}` | PASS: `verify-live-api.ts` got 400 wallet: Invalid wallet address |
+| API-08 | auth verify: good signature / bad signature / reused nonce | H | token / 401 / 401 | PASS: `verify-live-api.ts` got a token for a good signature, 401 Invalid signature for a bad one, 401 for a reused nonce |
+| API-09 | `POST /api/profile` without token; invalid name; valid | H | 401; 400; 200 ProfileDto, then `GET /api/profile/:wallet` returns it | PASS: 401 without token, 400 invalid name, 200 ProfileDto, and GET /api/profile/:wallet returns the same name |
+| API-10 | `POST /api/faucet` without token; funded wallet; unfunded wallet; repeat | H | 401; `{skipped:true}`; `{signature}` whose transfer of 0.02 SOL lands on devnet; 429 | PASS: 401 without token; unfunded wallet got 20000000 lamports (tx XwZceLQD…, balance 0.02 SOL on devnet); funded repeat skipped:true; after draining below 0.01, repeat got 429 wallet limit |
+| API-11 | CORS | H | Vercel origin gets `access-control-allow-origin`; a foreign origin doesn't | PASS for the current allow-list: http://localhost:3000 gets allow-origin on preflight and GET; https://evil.example.com gets none. The Vercel origin is re-checked after DEP-03 |
+| API-12 | Errors | H | Unknown route → 404 JSON `{error}`; no stack traces anywhere | PASS: 404 Not found, 405 Method not allowed, 400 Invalid JSON body; no stack traces in any error body |
 
 ## 3. Realtime WebSocket, indexer, keeper
 
@@ -77,11 +77,11 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | WS-05 | trade broadcast | B | An ER trade appears as a `trade` frame within 5s, and on the market chart and leaderboard | NOT RUN |
 | WS-06 | round broadcast | B | At rollover a `round` frame arrives; the UI countdown resets to the new round | NOT RUN |
 | WS-07 | reconnect | B | Server restart or going offline → client reconnects and receives a fresh snapshot; no unhandled error | NOT RUN |
-| IDX-01 | Indexer persistence | H | Trades from an E2E run exist in Mongo with matching sigs | NOT RUN |
+| IDX-01 | Indexer persistence | H | Trades from an E2E run exist in Mongo with matching sigs | PASS: round-4 trades and settlements in Mongo carry the exact sigs of the on-chain ability run (3ubUoks…, 5tZKJEm…); backfill on Railway read 986 txs, 45 events, 0 failures |
 | IDX-02 | Backfill after restart | H | After redeploy, trades made while down appear in `/api/trades` | NOT RUN |
 | KPR-01 | Keeper settle fan-out | H | After resolution every trader of the round is settled within 30s without a manual `settle_player` | NOT RUN |
 | KPR-02 | Keeper cheers | H | A Cheers win gets `request_cheers` from the keeper and `CheersPaid` follows | NOT RUN |
-| KPR-03 | Keeper watchdog | H | Logs show the crank rolled the round and no duplicate roll tx | NOT RUN |
+| KPR-03 | Keeper watchdog | H | Logs show the crank rolled the round and no duplicate roll tx | PASS: Railway log at 23:50:06 shows Crank rolled: round 8 -> round 9, last_roll_ts 1789257001 (1s after end); keeper.lastRollSig is null, so no duplicate roll tx |
 
 ## 4. Web app (Vercel) — every screen and component
 
@@ -118,8 +118,8 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 
 | ID | Item | Correct means | Status |
 |---|---|---|---|
-| DEP-01 | Railway deploy | Build succeeds, `/health` ok, logs show indexer subscribed and keeper running | NOT RUN |
-| DEP-02 | Atlas from Railway | `/health.mongo=true` and writes visible in Atlas | NOT RUN |
+| DEP-01 | Railway deploy | Build succeeds, `/health` ok, logs show indexer subscribed and keeper running | PASS: the Dockerfile build succeeded (Railpack had detected Rust; fixed). Boot log shows mongo connected, indexer watching the program, keeper started; /health ok |
+| DEP-02 | Atlas from Railway | `/health.mongo=true` and writes visible in Atlas | PASS: /health mongo:true from Railway; probe user, session and faucet writes were read back through the API and then removed |
 | DEP-03 | Vercel deploy | Production build succeeds from apps/web with workspace packages | NOT RUN |
 | DEP-04 | GitHub | `main` contains all code; no secrets committed (`git grep` for key material and the Mongo URI returns nothing) | NOT RUN |
 
