@@ -9,8 +9,8 @@ import type { ServiceStatus } from './types'
 import { errorMessage } from './util'
 
 const status: ServiceStatus = {
-  indexer: { lastSig: null, lastEventAt: null },
-  keeper: { lastRollSig: null, lastRollAt: null },
+  indexer: { enabled: env.INDEXER_ENABLED, lastSig: null, lastEventAt: null },
+  keeper: { enabled: env.KEEPER_ENABLED, lastRollSig: null, lastRollAt: null },
 }
 
 const database = await connectDb(env.MONGODB_URI, env.MONGODB_DB)

@@ -1,3 +1,4 @@
+import { BN } from '@coral-xyz/anchor'
 import { PublicKey } from '@solana/web3.js'
 import { signatureOf, VRF_EPHEMERAL_QUEUE, type ArenaAccount, type ArenaChain } from './chain'
 import {
@@ -18,6 +19,11 @@ export const ROLL_GRACE_SECONDS = 8
 export const CRANK_STALL_SECONDS = 20
 export const COMMIT_EVERY_ROUNDS = 12
 export const MAX_COMMITS = 9
+/** Consecutive rounds the keeper had to roll itself before it schedules a fresh MagicBlock crank task. */
+export const CRANK_RESCHEDULE_AFTER_STALLS = 2
+export const CRANK_INTERVAL_MS = 2_000
+export const CRANK_ITERATIONS = 200_000
+const CRANK_RESCHEDULE_BACKOFF_MS = 10 * 60_000
 const RETRY_BACKOFF_MS = 6_000
 const COMMIT_BACKOFF_MS = 60_000
 const MAX_SETTLE_ATTEMPTS = 5
@@ -48,12 +54,24 @@ export const crankStalled = ({ status, endTs, lastRollTs, now }: RollInput): boo
 export const shouldCommit = (latestResolved: number, lastCommitRound: number, commits: number): boolean =>
   commits < MAX_COMMITS && latestResolved - lastCommitRound >= COMMIT_EVERY_ROUNDS
 
+/** The crank task is finite (iterations × interval); a run of stalled rounds means it expired or died. */
+export const shouldRescheduleCrank = (stalledRounds: number): boolean => stalledRounds >= CRANK_RESCHEDULE_AFTER_STALLS
+
+/** Same derivation as `crankTaskId` in @rogs/arena-sdk: the first 7 bytes of SHA-256(label). */
+export async function crankTaskId(label: string): Promise<bigint> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(label)))
+  let value = 0n
+  for (let i = 0; i < 7; i++) value = (value << 8n) | BigInt(digest[i]!)
+  return value
+}
+
 export class Keeper {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
   private lastSeen: { id: number; status: number } | null = null
   private settledThrough: number | null = null
   private stallLoggedFor: number | null = null
+  private stalledRounds = 0
   private oracleMismatchLogged = false
   private logWrites = 0
   private readonly retryAfter = new Map<string, number>()
@@ -108,6 +126,7 @@ export class Keeper {
     const previous = this.lastSeen
     this.lastSeen = { id, status }
     if (!previous || (previous.id === id && previous.status === status)) return
+    this.stalledRounds = 0
     void this.log(
       'info',
       'crank',
@@ -131,11 +150,13 @@ export class Keeper {
     }
     if (crankStalled(input) && this.stallLoggedFor !== id) {
       this.stallLoggedFor = id
+      this.stalledRounds += 1
       await this.log(
         'warn',
         'crank',
-        `Crank looks stalled: round ${id} ended ${now - input.endTs}s ago, last_roll_ts is ${input.endTs - input.lastRollTs}s behind end_ts (task ${arena.crankTaskId.toString()}). Re-schedule it with the crank script.`,
+        `Crank looks stalled: round ${id} ended ${now - input.endTs}s ago, last_roll_ts is ${input.endTs - input.lastRollTs}s behind end_ts (task ${arena.crankTaskId.toString()}, ${this.stalledRounds} stalled round(s) in a row)`,
       )
+      if (shouldRescheduleCrank(this.stalledRounds) && !this.inBackoff('crank-schedule')) await this.rescheduleCrank(arena, id)
     }
 
     const reason = rollReason(input)
@@ -305,6 +326,26 @@ export class Keeper {
     } catch (error) {
       this.backoff(key, RETRY_BACKOFF_MS * 5)
       await this.log('error', 'cheers', `resetCheers failed for ${owner.toBase58()}`, signatureOf(error), error)
+    }
+  }
+
+  /**
+   * Schedules a fresh MagicBlock crank task for roll_round. The previous task either ran out of
+   * iterations or died; the keeper has been rolling rounds itself in the meantime.
+   */
+  private async rescheduleCrank(arena: ArenaAccount, roundId: number): Promise<void> {
+    this.backoff('crank-schedule', CRANK_RESCHEDULE_BACKOFF_MS)
+    try {
+      const taskId = await crankTaskId(`rogs-arena:rounds:${this.chain.arena.toBase58()}:r${roundId}`)
+      const tx = await this.chain.program.methods
+        .scheduleRoundCrank(new BN(taskId.toString()), new BN(CRANK_INTERVAL_MS), new BN(CRANK_ITERATIONS))
+        .accountsPartial({ authority: this.chain.keeper.publicKey, arena: this.chain.arena, priceFeed: arena.oracleFeed })
+        .transaction()
+      const sig = await this.chain.sendErTx(tx, [this.chain.keeper])
+      this.stalledRounds = 0
+      await this.log('warn', 'crank', `Scheduled a fresh crank task ${taskId} after ${CRANK_RESCHEDULE_AFTER_STALLS} stalled rounds`, sig)
+    } catch (error) {
+      await this.log('error', 'crank', 'scheduleRoundCrank failed', signatureOf(error), error)
     }
   }
 

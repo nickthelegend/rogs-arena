@@ -101,6 +101,6 @@ export type ArenaSnapshot = {
 }
 
 export type ServiceStatus = {
-  indexer: { lastSig: string | null; lastEventAt: number | null }
-  keeper: { lastRollSig: string | null; lastRollAt: number | null }
+  indexer: { enabled: boolean; lastSig: string | null; lastEventAt: number | null }
+  keeper: { enabled: boolean; lastRollSig: string | null; lastRollAt: number | null }
 }

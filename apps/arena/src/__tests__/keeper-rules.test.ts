@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ROUND_IDLE, ROUND_OPEN, ROUND_RESOLVED } from '../constants'
-import { crankStalled, rollReason, shouldCommit, type RollInput } from '../keeper'
+import { crankTaskId as sdkCrankTaskId } from '@rogs/arena-sdk'
+import { crankStalled, crankTaskId, rollReason, shouldCommit, shouldRescheduleCrank, type RollInput } from '../keeper'
 
 const base: RollInput = {
   status: ROUND_OPEN,
@@ -27,6 +28,19 @@ describe('keeper decisions', () => {
     expect(crankStalled({ ...base, now: 1_019 })).toBe(false)
     expect(crankStalled({ ...base, now: 1_020 })).toBe(true)
     expect(crankStalled({ ...base, now: 1_020, lastRollTs: 1_001 })).toBe(false)
+  })
+
+  test('a fresh crank task is scheduled after 2 consecutive stalled rounds', () => {
+    expect(shouldRescheduleCrank(0)).toBe(false)
+    expect(shouldRescheduleCrank(1)).toBe(false)
+    expect(shouldRescheduleCrank(2)).toBe(true)
+  })
+
+  test('crank task ids match the SDK derivation used at bootstrap', async () => {
+    const label = 'rogs-arena:rounds:ApzYL11HC9puv4dbFk1QTCrE4wpLup8ta9QE2UKde2CJ'
+    expect(await crankTaskId(label)).toBe(await sdkCrankTaskId(label))
+    expect(await crankTaskId(`${label}:r42`)).not.toBe(await crankTaskId(label))
+    expect(await crankTaskId(label)).toBeLessThan(2n ** 56n)
   })
 
   test('commits every 12 resolved rounds, at most 9 times', () => {
