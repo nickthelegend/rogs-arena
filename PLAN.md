@@ -415,10 +415,10 @@ rogs/
 - **P5.15** `NOT STARTED` (P0) — Tests updated and green: `bun test` in apps/web. `next build` succeeds with only the §2.6 vars; `tsc --noEmit` is clean (`next-env.d.ts` generated).
 
 ### Phase 6 — Deploy & wire (target: 14:00 IST)
-- **P6.01** `IN PROGRESS` (P0) — Railway: `railway init` project `rogs-arena` → service `arena` → set §2.6 vars (Mongo URI from the owner's message, keypairs from `~/.config/solana/rogs-*.json`) → `railway up` → generate domain.
+- **P6.01** `DONE` (P0) — Railway: `railway init` project `rogs-arena` → service `arena` → set §2.6 vars (Mongo URI from the owner's message, keypairs from `~/.config/solana/rogs-*.json`) → `railway up` → generate domain.
   - *Railway project `rogs-arena` d6a31546-6c7b-4070-baec-3a9fec690547, service `arena` 3e2e46cd-3a18-4d63-86f9-2559d9382e4f created 05:17 IST.*
   - *Accept:* `GET https://<domain>/health` returns `{ok:true, mongo:true, er:true, arena:{roundId}}`.
-- **P6.02** `NOT STARTED` (P0) — Atlas network access: confirm Railway can connect (the health `mongo:true`). If it's blocked → `BLOCKED` (the owner must add 0.0.0.0/0 in Atlas; no API key available).
+- **P6.02** `DONE` (P0) — Atlas network access: confirm Railway can connect (the health `mongo:true`). If it's blocked → `BLOCKED` (the owner must add 0.0.0.0/0 in Atlas; no API key available).
 - **P6.03** `NOT STARTED` (P0) — Vercel: `vercel link` (project `rogs-arena`, root `apps/web`) → env vars → `vercel --prod`.
   - *Accept:* the production URL loads with zero console errors.
 - **P6.04** `NOT STARTED` (P0) — Set CORS on Railway to the Vercel domain(s). Point the WS URL to `wss://<railway-domain>/ws`.
