@@ -1,0 +1,27 @@
+{
+  "name": "@apps/watcher",
+  "module": "index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.tsx -- --interval 5m",
+    "build": "true",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/shared": "*",
+    "@somnia-chain/markets-sdk": "^0.28.1",
+    "@t3-oss/env-core": "^0.13.11",
+    "firebase": "^12.18.0",
+    "ink": "^7.1.1",
+    "react": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.18"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

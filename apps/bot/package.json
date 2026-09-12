@@ -1,0 +1,30 @@
+{
+  "name": "@apps/bot",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.ts",
+    "build": "true",
+    "generate-wallets": "bun run src/scripts/generate-wallets.ts",
+    "wallets": "bun run src/scripts/wallets.ts",
+    "faucet": "bun run src/scripts/faucet.ts",
+    "chat": "bun run src/scripts/chat.ts",
+    "trade": "bun run src/scripts/trade.ts -- --interval 200 --limit 5 --batch 2",
+    "claim": "bun run src/scripts/claim.ts -- --all"
+  },
+  "dependencies": {
+    "@repo/shared": "*",
+    "@somnia-chain/markets-sdk": "^0.28.1",
+    "@t3-oss/env-core": "^0.13.11",
+    "firebase": "^12.18.0",
+    "viem": "^2.56.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

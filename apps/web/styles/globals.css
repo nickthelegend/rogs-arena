@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #121314;
+
+  --section-background: #1a1a1a;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-section-background: var(--section-background);
+
+  --font-sans: var(--font-geist-sans);
+  --font-abc-gravity-italic: var(--font-abc-gravity-italic);
+
+  --text-xs--line-height: 1;
+  --text-sm--line-height: 1;
+  --text-base--line-height: 1;
+  --text-lg--line-height: 1;
+  --text-xl--line-height: 1;
+  --text-2xl--line-height: 1;
+  --text-3xl--line-height: 1;
+  --text-4xl--line-height: 1;
+  --text-5xl--line-height: 1;
+  --text-6xl--line-height: 1;
+  --text-7xl--line-height: 1;
+  --text-8xl--line-height: 1;
+  --text-9xl--line-height: 1;
+}
+
+@layer base {
+  button {
+    @apply cursor-pointer;
+  }
+
+  input {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .section-panel {
+    @apply w-full flex-1 bg-section-background rounded-2xl p-2;
+  }
+
+  .hide-scrollbar {
+    @apply [&::-webkit-scrollbar]:hidden [&::-webkit-scrollbar-track]:hidden [&::-webkit-scrollbar-thumb]:hidden [&::-webkit-scrollbar-corner]:hidden [&::-webkit-resizer]:hidden;
+  }
+}
+
+html {
+  line-height: 1;
+}
+
+body {
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
