@@ -23,7 +23,7 @@ Players: `75hZaAkk1Cnv1mctMQvSa9rGKLxtcvJm6WXxKYhT2qfE`, `DjYUFBgaPSQoyeUSa1BU1e
 | 16 | crank rolled the round inside the ER | PASS | outcome YES strike 7725570971918 close 7726266920786, rolled 1s after end | — |
 | 17 | P1 settle_player | PASS | payout 9.780446 profit 4.780446 bonus 10.000000 calm true cheers false; balance delta 19.780446; wins 1 losses 0 calmWins 1 | [3zMLWSBB…](https://solscan.io/tx/3zMLWSBBf65YsxLWh5qk4yta2xPxq5VHC6sHdesmdM1zECiBzWCbVjJddAgeKV4HicwmfDLSFE9N8efSbDJHQtCc?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | 18 | P2 settle_player | PASS | payout 0.000000 profit -2.534225 bonus 0.000000 calm false cheers false; balance delta 0.000000; wins 0 losses 1 calmWins 0 | [5dpUySWh…](https://solscan.io/tx/5dpUySWhmdkyKXNcPg7BaQnCm1xmowd6xT6taV87LT37yBBv1XDgpGYcEmgKwy3PfBWPTKsppLswEUoMB5CNsf8Z?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 19 | cheers via VRF | PASS | not exercised this run: the Cheers position did not finish in profit | — |
+| 19 | cheers via VRF | NOT EXERCISED | the Cheers position did not finish in profit this run; VRF Cheers is verified in the deterministic run below | — |
 | 20 | P1 commit_player to Solana | PASS | commit scheduled from the ER | [Np1fntai…](https://solscan.io/tx/Np1fntai7EzWQDYBWvTTRu8oH578suvoy5dfHqAPhnBPug3bCpJfGurGYJDcCkMHXyauj9XmqYgRy9xLT5RK6j2?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | 21 | base layer shows committed player state | PASS | trades 1 balance 264.780446 USD | — |
 
@@ -48,4 +48,4 @@ Run at 2026-09-12T23:20:03.109Z.
 | crank rolled the round | PASS | round 2 outcome NO, 1s after end | — |
 | P2 settle marks Cheers pending | PASS | profit 1.572087 USD, cheers_pending 1 | [3du9hknx…](https://solscan.io/tx/3du9hknxvxSHgYfcKeFH6LYuXQP6FEua2WwQFHAxDmpqKX9zy4wGEAWMYK4W6EFQTLy7TTxWaAyoC5sAj8xcRZVZ?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | P2 request_cheers on the ephemeral VRF queue | PASS | candidate: P1 | [3z18MVog…](https://solscan.io/tx/3z18MVog4zgBTpE6jDiUSdaj9L8P5Z2XkaxG254npPNXFTVwKThtHc2UxaiQjdoSMqYK2E21r6vUePijTnQijpHH?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| VRF callback paid Cheers | PASS | P1 balance +1 USD, cheers_received 1 USD | — |
+| VRF callback paid Cheers | PASS | P1 balance +1 USD, cheers_received 1 USD; `CheersPaid` recipients BymPzSSHHUbhcw9qB1TLQkzcV2HD17n3mB4Ax2FP9699, randomness 4a55442c30cc9f666a70d4cc73db947864bef23082dc658af5375c312cc72cb5 | [3acK2K49…](https://solscan.io/tx/3acK2K49b37rgwVbSXFBdYmk7p937iNzHmrvMBpktJLsfTSZrTazMsQqTivjbkH5kE9VcCJztK4cGJupKTxvVbtV?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |

@@ -10,7 +10,7 @@
  *
  * Usage: bun run packages/arena-sdk/scripts/e2e-devnet.ts
  */
-import { writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from '@solana/web3.js'
 
 import {
@@ -48,14 +48,16 @@ import {
 } from '../src/index'
 import { loadKeypair } from './lib/keys'
 
-type Step = { step: string; ok: boolean; detail: string; signature?: string; layer?: 'base' | 'er'; ms?: number }
+type Step = { step: string; ok: boolean; skipped?: boolean; detail: string; signature?: string; layer?: 'base' | 'er'; ms?: number }
 const steps: Step[] = []
+
+const verdict = (step: Step) => (step.skipped ? 'NOT EXERCISED' : step.ok ? 'PASS' : 'FAIL')
 
 function record(step: Step) {
   steps.push(step)
   const link = step.signature ? ` ${explorerTxUrl(step.signature, step.layer ?? 'er')}` : ''
   const ms = step.ms != null ? ` (${Math.round(step.ms)}ms)` : ''
-  console.log(`${step.ok ? 'PASS' : 'FAIL'} ${step.step}: ${step.detail}${ms}${link}`)
+  console.log(`${verdict(step)} ${step.step}: ${step.detail}${ms}${link}`)
 }
 
 function assertEqual<T>(step: string, actual: T, expected: T) {
@@ -223,7 +225,7 @@ async function main() {
     )
     record({ step: 'VRF callback paid cheers', ok: paid.balance - p1Before.balance === 1n * USD, detail: `P1 cheers_received ${usd(paid.cheersReceived)} USD` })
   } else {
-    record({ step: 'cheers via VRF', ok: true, detail: 'not exercised this run: the Cheers position did not finish in profit' })
+    record({ step: 'cheers via VRF', ok: true, skipped: true, detail: 'the Cheers position did not finish in profit this run; e2e-cheers-vrf.ts exercises it deterministically' })
   }
 
   // 10. Commit P1 back to Solana and read the committed state on the base layer.
@@ -243,10 +245,16 @@ async function main() {
 
   const final = await fetchArena(connections.er)
   writeReport(final, [p1, p2].map((player) => player.owner.toBase58()))
-  console.log(`\nE2E PASSED: ${steps.filter((step) => step.ok).length}/${steps.length} steps`)
+  const exercised = steps.filter((step) => !step.skipped)
+  console.log(`\nE2E PASSED: ${exercised.filter((step) => step.ok).length}/${exercised.length} steps (${steps.length - exercised.length} not exercised)`)
 }
 
+const REPORT_URL = new URL('../../../docs/E2E-RUN.md', import.meta.url)
+
 function writeReport(arena: ArenaState, owners: string[]) {
+  // Keep the sections other scripts append (commit_arena, Cheers VRF): only the run table is replaced.
+  const previous = existsSync(REPORT_URL) ? readFileSync(REPORT_URL, 'utf8') : ''
+  const appendix = previous.indexOf('\n## ') >= 0 ? previous.slice(previous.indexOf('\n## ')) : ''
   const lines = [
     '# E2E devnet run',
     '',
@@ -255,10 +263,10 @@ function writeReport(arena: ArenaState, owners: string[]) {
     '',
     '| # | Step | Result | Detail | Transaction |',
     '|---|---|---|---|---|',
-    ...steps.map((step, index) => `| ${index + 1} | ${step.step} | ${step.ok ? 'PASS' : 'FAIL'} | ${step.detail.replaceAll('|', '/')} | ${step.signature ? `[${step.signature.slice(0, 8)}…](${explorerTxUrl(step.signature, step.layer ?? 'er')})` : '—'} |`),
+    ...steps.map((step, index) => `| ${index + 1} | ${step.step} | ${verdict(step)} | ${step.detail.replaceAll('|', '/')} | ${step.signature ? `[${step.signature.slice(0, 8)}…](${explorerTxUrl(step.signature, step.layer ?? 'er')})` : '—'} |`),
     '',
   ]
-  writeFileSync(new URL('../../../docs/E2E-RUN.md', import.meta.url), lines.join('\n'))
+  writeFileSync(REPORT_URL, lines.join('\n') + appendix)
 }
 
 main().catch((error) => {

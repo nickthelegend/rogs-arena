@@ -3,7 +3,7 @@
  * transactions (TEST-PLAN CH-07, 09, 11, 12, 13, 15, 16, 17, 21, 23).
  * Usage: bun run packages/arena-sdk/scripts/test-guards.ts
  */
-import { writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { Keypair, LAMPORTS_PER_SOL, SystemProgram } from '@solana/web3.js'
 import {
   ABILITY_DOUBLE,
@@ -122,7 +122,11 @@ async function main() {
   await waitUntil(endTs - 3)
   await expectFail('CH-13', 'buy in the last 5 seconds is locked', async () => sendErTransaction(c.er, [await ix.buy(sa.keypair.publicKey, a.publicKey, OUTCOME_YES, 2n * USD, 0n, 0, sa.token)], sa.keypair), ['locked'])
 
-  writeFileSync(new URL('../../../docs/TEST-RUN-CHAIN.md', import.meta.url), [
+  // Keep the sections other scripts append (ability bonuses): only the guard table is replaced.
+  const reportUrl = new URL('../../../docs/TEST-RUN-CHAIN.md', import.meta.url)
+  const previous = existsSync(reportUrl) ? readFileSync(reportUrl, 'utf8') : ''
+  const appendix = previous.indexOf('\n## ') >= 0 ? previous.slice(previous.indexOf('\n## ')) : ''
+  writeFileSync(reportUrl, [
     '# On-chain guard verification (devnet + MagicBlock ER)',
     '',
     `Run at ${new Date().toISOString()} in round ${roundId}. Players ${a.publicKey.toBase58()}, ${b.publicKey.toBase58()}; stranger ${stranger.publicKey.toBase58()}.`,
