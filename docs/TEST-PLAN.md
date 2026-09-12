@@ -46,7 +46,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | CH-21 | settle idempotent | S | `settle_player` twice | Second call succeeds with no balance change and no event | PASS — two settle_player calls, balance unchanged at 248 |
 | CH-22 | commit_player / commit_arena | S | Commit, then read base | Base data equals ER state (trades, balance / round, commits) while still delegated | PASS — commit_player: base shows trades 1, balance 264.780446; commit_arena: base went round 0 → 2, trades 0 → 6, still delegated |
 | CH-23 | Authority-only instructions | S | `fund_treasury` / `commit_arena` signed by a random key | `Unauthorized` | PASS — fund_treasury and commit_arena by a stranger both rejected |
-| CH-24 | Rust unit tests | S | `cargo test -p rogs-arena --lib` | 22 passed, 0 failed | NOT RUN |
+| CH-24 | Rust unit tests | S | `cargo test -p rogs-arena --lib` | 22 passed, 0 failed | PASS — 22 passed, 0 failed (fresh rerun 05:43) |
 | CH-25 | SDK tests | S | `bun test` in packages/arena-sdk | All pass, including the live oracle read | PASS — 13/13 bun tests including the live oracle read and real CPI event logs |
 
 ## 2. Arena service HTTP API (Railway)
