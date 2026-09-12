@@ -32,3 +32,20 @@ Players: `75hZaAkk1Cnv1mctMQvSa9rGKLxtcvJm6WXxKYhT2qfE`, `DjYUFBgaPSQoyeUSa1BU1e
 Run at 2026-09-12T23:18:40.506Z. The `commit_arena` transaction on the ER is [2qc96JkV…](https://solscan.io/tx/2qc96JkVd681n6icMr1hnDqpi8BkJhnSiYqUfyPa76r63AuERz5Ew4K9Nr5ezrWaPNJPdD2tmbbWNxVqciB6sMAL?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app).
 Before the commit, Solana held round 0, 0 trades and 0 commits.
 After it landed, Solana held round 2, 6 trades and 1 commits. The account is still owned by the delegation program, so the arena kept running on the ER. Result: PASS.
+
+## Cheers via MagicBlock VRF (deterministic run)
+
+Run at 2026-09-12T23:20:03.109Z.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| fund players | PASS | BymPzSSHHUbhcw9qB1TLQkzcV2HD17n3mB4Ax2FP9699, 42j1sjE7LUGWdgD25zVgypDx5jhkzbDCZzWMVzV8RqL4 | [4AFcCmTw…](https://explorer.solana.com/tx/4AFcCmTwLuvD5tQjd7be8Bo2XYwU4gviqWFj6chKoeafAnNRAa2oYc9gEt8UABfwDpDXi2ZyyS3PhPX1tU5DeV8v?cluster=devnet) |
+| players delegated, sessions created, chips claimed | PASS | both players at 250 USD | — |
+| P2 buy YES $5 with Cheers | PASS | 9780446 shares in round 2 | [5TndLzKc…](https://solscan.io/tx/5TndLzKccc1e1M1bhzrZiWZHDH4AsftW1F7i5iDrbDkz1Gr399nciGwi1mvyHmofH4xYsQU4usS7rAZ7K8SUeD3A?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 buy YES $90 (moves the AMM price) | PASS | 148238266 shares | [3P7b1vt8…](https://solscan.io/tx/3P7b1vt8s4jLfqKiHCT8BtW9B4MGesDDuW1WTmgu77HUVjXyxnJa3mBWUsNb4KzQxKHcZ6CSCNvadkc8mbsp7a4W?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| sell quote is above cost | PASS | sell 9780446 YES for 6.572087 USD vs cost 5 USD | — |
+| P2 sells into the move | PASS | realized 1.572087 USD | [VWZVMvTE…](https://solscan.io/tx/VWZVMvTECoxtBzkMGufaGBy1JbzQFgtXbAGAz6Vf87WmqXWs1ZXXu1phqQ7DKcb9eSfumXZxoYmBg4gRiWJ6f7Z?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| crank rolled the round | PASS | round 2 outcome NO, 1s after end | — |
+| P2 settle marks Cheers pending | PASS | profit 1.572087 USD, cheers_pending 1 | [3du9hknx…](https://solscan.io/tx/3du9hknxvxSHgYfcKeFH6LYuXQP6FEua2WwQFHAxDmpqKX9zy4wGEAWMYK4W6EFQTLy7TTxWaAyoC5sAj8xcRZVZ?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P2 request_cheers on the ephemeral VRF queue | PASS | candidate: P1 | [3z18MVog…](https://solscan.io/tx/3z18MVog4zgBTpE6jDiUSdaj9L8P5Z2XkaxG254npPNXFTVwKThtHc2UxaiQjdoSMqYK2E21r6vUePijTnQijpHH?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| VRF callback paid Cheers | PASS | P1 balance +1 USD, cheers_received 1 USD | — |

@@ -312,7 +312,8 @@ rogs/
   - *Verified on devnet at 05:15 IST in docs/E2E-RUN.md. The ER ran claim_chips, buy, sell, report_heart, attach_ability (rejected after a sell), settle_player and roll_round, with exact balances.*
 - **P1.06** `DONE` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
   - *Verified 05:15 IST: the crank resolved round 1 and opened round 2 one second after end_ts, with no keeper process running (packages/arena-sdk/scripts/watch-crank.ts).*
-- **P1.07** `IN PROGRESS` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
+- **P1.07** `DONE` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
+  - *Verified 05:31 IST (docs/E2E-RUN.md, e2e-cheers-vrf.ts): Cheers settled at +1.572087 profit, then cheers_pending=1, then request_cheers on the ephemeral VRF queue (tx 3z18MVog…). The VRF callback paid the candidate exactly +1.000000 USD.*
 - **P1.08** `DONE` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
   - *commit_player verified 05:16 IST: the base-layer Player account shows the committed trades and balance. commit_arena verified 05:24 IST: the ER commit (158ms) moved the base-layer Arena from round 0 with 0 trades to round 2 with 6 trades and 1 commit, still owned by the delegation program (docs/E2E-RUN.md; packages/arena-sdk/scripts/commit-arena.ts).*
 - **P1.09** `DONE` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
