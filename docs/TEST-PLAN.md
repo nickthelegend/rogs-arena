@@ -23,31 +23,31 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 
 | ID | Item | Method | Steps | Correct means | Status |
 |---|---|---|---|---|---|
-| CH-01 | Program deployed | S | `solana program show J83q…` on devnet | Upgradeable program, 654,792 bytes, authority `Ens1TxKQ…` | NOT RUN |
-| CH-02 | Arena delegated | S | Read the arena account on base and ER | Base owner = `DELeGG…`; ER owner = program; router `getDelegationStatus` isDelegated=true | NOT RUN |
-| CH-03 | Crank rolls rounds without a keeper | S | `watch-crank.ts` with keeper disabled | `current.id` increments and `last_roll_ts - previous end_ts ≤ 5s`; outcome is YES iff close ≥ strike | NOT RUN |
+| CH-01 | Program deployed | S | `solana program show J83q…` on devnet | Upgradeable program, 654,792 bytes, authority `Ens1TxKQ…` | PASS — upgradeable, 654,792 bytes, authority Ens1TxKQ… (05:40) |
+| CH-02 | Arena delegated | S | Read the arena account on base and ER | Base owner = `DELeGG…`; ER owner = program; router `getDelegationStatus` isDelegated=true | PASS — base owner DELeGG…, ER owner program, router isDelegated=true fqdn devnet-as (05:40) |
+| CH-03 | Crank rolls rounds without a keeper | S | `watch-crank.ts` with keeper disabled | `current.id` increments and `last_roll_ts - previous end_ts ≤ 5s`; outcome is YES iff close ≥ strike | PASS — round 1 → 2 rolled 1s after end_ts with no keeper; YES with close 7726266920786 ≥ strike 7725570971918 (watch-crank.ts) |
 | CH-04 | Strike and close come from the MagicBlock oracle | S | Compare `RoundOpened.strike_price` / `RoundResolved.close_price` with the BTC/USD feed `71wtT…` at roll time | Both equal the feed's `price` at a `publish_time` within 10s of `last_roll_ts` | NOT RUN |
-| CH-05 | init_player + delegate_player | S+B | Fresh wallet → setup | Player PDA exists, base owner `DELeGG…`, visible on the ER with owner = program | NOT RUN |
-| CH-06 | Session key (Gum V2) authorises ER actions | S+B | `createSessionV2`, then `claim_chips` signed only by the session key | Tx succeeds on the ER; the session token PDA `["session_token_v2", program, signer, authority]` exists on base | NOT RUN |
-| CH-07 | Wrong session / non-owner rejected | S | Session key of wallet A signs `buy` for wallet B's player; random key with no token signs `buy` | Both fail: `InvalidToken` / `Unauthorized`; balances unchanged | NOT RUN |
-| CH-08 | claim_chips first join | S+B | New player claims | Balance = 250.000000; `joined=true`; `ChipsClaimed{first:true}` | NOT RUN |
-| CH-09 | claim_chips faucet guard | S | Claim again immediately | Fails `FaucetCooldown` (or `FaucetBalanceTooHigh`); balance unchanged | NOT RUN |
-| CH-10 | buy happy path | S+B | Buy YES $5 | Balance −5; shares = SDK `quoteBuy` exactly; `TradeExecuted` side 0; yes_price moves up | NOT RUN |
-| CH-11 | buy limits | S | amount 0.5 USD; 101 USD; > balance | `AmountTooSmall`; `AmountTooLarge`; `InsufficientBalance` | NOT RUN |
-| CH-12 | buy slippage | S | `min_shares = quote + 1` | `SlippageExceeded`; no state change | NOT RUN |
-| CH-13 | trading lock | S | Buy in the last 5s of a round | `TradingLocked` | NOT RUN |
-| CH-14 | sell happy path | S+B | Sell half of a position | Balance + `quoteSell.out`; shares reduced; `TradeExecuted` side 1 with `realized_pnl` | NOT RUN |
-| CH-15 | sell more than held | S | Sell held+1 | `NothingToSell` | NOT RUN |
-| CH-16 | attach_ability rules | S+B | Attach before lock; second card; after a sell; within 30s of end | First OK (`AbilityAttached`); others `AbilityAlreadySet` / `TradingLocked` | NOT RUN |
-| CH-17 | report_heart | S | bpm 80 → OK; bpm 20 → fail | `heart_bpm=80` and the active position's `max_bpm` updated; bpm 20 fails `InvalidHeartRate` | NOT RUN |
-| CH-18 | Settlement math | S | Settle after resolution | balance delta = payout + bonus from SDK `settleSlot`; slot cleared; wins/losses/streak updated | NOT RUN |
-| CH-19 | Double / Protect / Calm bonuses | S | Positions with each card | Double = min(profit,10); Protect = min(loss,10); Calm = 10 only if max_bpm<120 with samples | NOT RUN |
-| CH-20 | Cheers via VRF | S | `e2e-cheers-vrf.ts` | `cheers_pending=1` after settle; `request_cheers` succeeds; callback pays each candidate exactly 1.000000; `CheersPaid` includes the randomness | NOT RUN |
-| CH-21 | settle idempotent | S | `settle_player` twice | Second call succeeds with no balance change and no event | NOT RUN |
-| CH-22 | commit_player / commit_arena | S | Commit, then read base | Base data equals ER state (trades, balance / round, commits) while still delegated | NOT RUN |
-| CH-23 | Authority-only instructions | S | `fund_treasury` / `commit_arena` signed by a random key | `Unauthorized` | NOT RUN |
+| CH-05 | init_player + delegate_player | S+B | Fresh wallet → setup | Player PDA exists, base owner `DELeGG…`, visible on the ER with owner = program | S PASS (E2E-RUN P1/P2 init+delegate) · B NOT RUN |
+| CH-06 | Session key (Gum V2) authorises ER actions | S+B | `createSessionV2`, then `claim_chips` signed only by the session key | Tx succeeds on the ER; the session token PDA `["session_token_v2", program, signer, authority]` exists on base | S PASS (claim_chips signed only by the session key, 281ms) · B NOT RUN |
+| CH-07 | Wrong session / non-owner rejected | S | Session key of wallet A signs `buy` for wallet B's player; random key with no token signs `buy` | Both fail: `InvalidToken` / `Unauthorized`; balances unchanged | PASS — "Invalid session token" and "Signer is not allowed to act for this account"; balances unchanged (TEST-RUN-CHAIN) |
+| CH-08 | claim_chips first join | S+B | New player claims | Balance = 250.000000; `joined=true`; `ChipsClaimed{first:true}` | S PASS (balance 250.000000 after the first claim) · B NOT RUN |
+| CH-09 | claim_chips faucet guard | S | Claim again immediately | Fails `FaucetCooldown` (or `FaucetBalanceTooHigh`); balance unchanged | PASS — "Faucet is cooling down", balance unchanged |
+| CH-10 | buy happy path | S+B | Buy YES $5 | Balance −5; shares = SDK `quoteBuy` exactly; `TradeExecuted` side 0; yes_price moves up | S PASS (shares 9780446 = quote; balance 245.000000) · B NOT RUN |
+| CH-11 | buy limits | S | amount 0.5 USD; 101 USD; > balance | `AmountTooSmall`; `AmountTooLarge`; `InsufficientBalance` | PASS — below minimum / above maximum / "Not enough chips" with state unchanged |
+| CH-12 | buy slippage | S | `min_shares = quote + 1` | `SlippageExceeded`; no state change | PASS — "Price moved beyond the allowed slippage", state unchanged |
+| CH-13 | trading lock | S | Buy in the last 5s of a round | `TradingLocked` | PASS — buy at end_ts-3 → "Trading is locked in the final seconds of the round" |
+| CH-14 | sell happy path | S+B | Sell half of a position | Balance + `quoteSell.out`; shares reduced; `TradeExecuted` side 1 with `realized_pnl` | S PASS (sold 5009741 shares for 2.465775; balance exact) · B NOT RUN |
+| CH-15 | sell more than held | S | Sell held+1 | `NothingToSell` | PASS — "Not enough shares to sell" |
+| CH-16 | attach_ability rules | S+B | Attach before lock; second card; after a sell; within 30s of end | First OK (`AbilityAttached`); others `AbilityAlreadySet` / `TradingLocked` | S PASS (attach OK tx JXRbJ8Z2…; second card, after-sell and last-30s rejected) · B NOT RUN |
+| CH-17 | report_heart | S | bpm 80 → OK; bpm 20 → fail | `heart_bpm=80` and the active position's `max_bpm` updated; bpm 20 fails `InvalidHeartRate` | PASS — bpm 80 → heart 80, maxBpm 80; bpm 20 → "Heart rate is out of range" |
+| CH-18 | Settlement math | S | Settle after resolution | balance delta = payout + bonus from SDK `settleSlot`; slot cleared; wins/losses/streak updated | PASS — E2E P1 delta 19.780446 = payout 9.780446 + bonus 10; P2 loss delta 0; stats updated |
+| CH-19 | Double / Protect / Calm bonuses | S | Positions with each card | Double = min(profit,10); Protect = min(loss,10); Calm = 10 only if max_bpm<120 with samples | PARTIAL — Calm PASS (bpm 80/84 → +10 bonus); Double/Protect run in progress (test-abilities.ts) |
+| CH-20 | Cheers via VRF | S | `e2e-cheers-vrf.ts` | `cheers_pending=1` after settle; `request_cheers` succeeds; callback pays each candidate exactly 1.000000; `CheersPaid` includes the randomness | PASS — cheers_pending=1; request_cheers 3z18MVog…; callback 3acK2K49… paid +1.000000; CheersPaid decoded with 32-byte randomness (after the SDK parser fix) |
+| CH-21 | settle idempotent | S | `settle_player` twice | Second call succeeds with no balance change and no event | PASS — two settle_player calls, balance unchanged at 248 |
+| CH-22 | commit_player / commit_arena | S | Commit, then read base | Base data equals ER state (trades, balance / round, commits) while still delegated | PASS — commit_player: base shows trades 1, balance 264.780446; commit_arena: base went round 0 → 2, trades 0 → 6, still delegated |
+| CH-23 | Authority-only instructions | S | `fund_treasury` / `commit_arena` signed by a random key | `Unauthorized` | PASS — fund_treasury and commit_arena by a stranger both rejected |
 | CH-24 | Rust unit tests | S | `cargo test -p rogs-arena --lib` | 22 passed, 0 failed | NOT RUN |
-| CH-25 | SDK tests | S | `bun test` in packages/arena-sdk | All pass, including the live oracle read | NOT RUN |
+| CH-25 | SDK tests | S | `bun test` in packages/arena-sdk | All pass, including the live oracle read | PASS — 13/13 bun tests including the live oracle read and real CPI event logs |
 
 ## 2. Arena service HTTP API (Railway)
 
