@@ -49,3 +49,18 @@ Run at 2026-09-12T23:20:03.109Z.
 | P2 settle marks Cheers pending | PASS | profit 1.572087 USD, cheers_pending 1 | [3du9hknx…](https://solscan.io/tx/3du9hknxvxSHgYfcKeFH6LYuXQP6FEua2WwQFHAxDmpqKX9zy4wGEAWMYK4W6EFQTLy7TTxWaAyoC5sAj8xcRZVZ?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | P2 request_cheers on the ephemeral VRF queue | PASS | candidate: P1 | [3z18MVog…](https://solscan.io/tx/3z18MVog4zgBTpE6jDiUSdaj9L8P5Z2XkaxG254npPNXFTVwKThtHc2UxaiQjdoSMqYK2E21r6vUePijTnQijpHH?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | VRF callback paid Cheers | PASS | P1 balance +1 USD, cheers_received 1 USD; `CheersPaid` recipients BymPzSSHHUbhcw9qB1TLQkzcV2HD17n3mB4Ax2FP9699, randomness 4a55442c30cc9f666a70d4cc73db947864bef23082dc658af5375c312cc72cb5 | [3acK2K49…](https://solscan.io/tx/3acK2K49b37rgwVbSXFBdYmk7p937iNzHmrvMBpktJLsfTSZrTazMsQqTivjbkH5kE9VcCJztK4cGJupKTxvVbtV?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+
+## Player undelegate and re-delegate (commit_and_undelegate)
+
+Run at 2026-09-12T23:41:13.669Z. Wallet `6dtg7sbLJqH4vkaFNPi79pKTpHQhbom4X5g6EimHJdeX`, Player `ENnMBsqQugmvrQJ1zPTex82PGUvoVN5xN2hfyAeg3ezW`.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| fund wallet | PASS | 6dtg7sbLJqH4vkaFNPi79pKTpHQhbom4X5g6EimHJdeX | [37TgQdwW…](https://explorer.solana.com/tx/37TgQdwWWaJiJvEdWaR3vzYZHXDxjZtVxoDovRLggaQJ8XptHZiog3FfzU9sP4sSkpn7o7PwFrWFcJukEZPDv8pW?cluster=devnet) |
+| init + delegate Player | PASS | ENnMBsqQugmvrQJ1zPTex82PGUvoVN5xN2hfyAeg3ezW | [4owwE46X…](https://explorer.solana.com/tx/4owwE46XL479Seaun7n7d5JKFyCUUG9FwrCcBfRS2vw49oc9vGBV9iwnXK3eXYnjnasrxnpf4vabghYZqZXFpS3W?cluster=devnet) |
+| claim_chips on the ER | PASS | ER balance 250.000000 USD | [5hXduYvN…](https://solscan.io/tx/5hXduYvNB2NoMAXKawwZihtCaV9nQCPJbidq23sXhiLZVb6NSbzwFB6D3PTEUG9Yr4KSHAJr1hXoc5dG1EN4zFjN?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| router reports delegated | PASS | {"isDelegated":true,"fqdn":"https://devnet-as.magicblock.app/","delegationRecord":{"authority":"MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57","owner":"J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q","delegationSlot":497432872,"lamports":2656840}} | — |
+| undelegate_player (commit_and_undelegate) | PASS | scheduled from the ER | [3sCuC1UP…](https://solscan.io/tx/3sCuC1UPpgtuqoxGcBRBMeHQvYjYusYCvyXCHViTMcEYhjh2Sfahidqs1c1jWfetxBWUC4FKr5S8DcKx5ewTgaCm?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| Player back under the program on Solana with ER state | PASS | owner J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q, base balance 250.000000 USD | — |
+| router reports undelegated | PASS | {"isDelegated":false} | — |
+| re-delegate Player, balance intact on the ER | PASS | ER balance 250.000000 USD | [2HBvpN1P…](https://explorer.solana.com/tx/2HBvpN1PwDy6wi9qKbh81XGCQgDhMQi1ikYvVr28podWyTQmnUJBmL1EDXcXh4M5szKJmx96hiSxeXJCzCxqUshR?cluster=devnet) |

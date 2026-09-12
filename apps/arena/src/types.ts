@@ -1,0 +1,106 @@
+// DTOs from docs/ARENA-API.md. Keep in lockstep with the web app.
+
+export type Outcome = 'YES' | 'NO'
+
+export type RoundDto = {
+  roundId: number
+  startTs: number
+  endTs: number
+  strikePrice: string
+  closePrice: string | null
+  priceExpo: number
+  outcome: Outcome | null
+  yesPool: number
+  noPool: number
+  volume: number
+  trades: number
+  openedSig: string | null
+  resolvedSig: string | null
+}
+
+export type TradeDto = {
+  id: string
+  sig: string
+  roundId: number
+  owner: string
+  side: 'BUY' | 'SELL'
+  outcome: Outcome
+  amount: number
+  shares: number
+  price: number
+  yesPrice: number
+  fee: number
+  realizedPnl: number
+  ability: number
+  t: number
+}
+
+export type PointDto = { roundId: number; t: number; yes: number; no: number; source: 'chain' }
+
+export type CloseDto = {
+  id: string
+  roundId: number
+  trader: string
+  outcome: Outcome
+  exit: 'tp' | 'sl'
+  profit: number
+  shares: number
+  t: number
+}
+
+export type SettlementDto = {
+  id: string
+  sig: string
+  roundId: number
+  owner: string
+  outcome: Outcome
+  payout: number
+  profit: number
+  ability: number
+  bonus: number
+  calm: boolean
+  cheers: boolean
+  t: number
+}
+
+export type TraderDto = {
+  address: string
+  name: string
+  status: 'online' | 'offline'
+  lastSeen: number
+  heartRate: number | null
+  heartRateAt: number | null
+  isBot: boolean
+}
+
+export type ChatDto = { id: string; address: string; name: string; message: string; t: number }
+
+export type CheersDto = {
+  sig: string
+  owner: string
+  recipients: string[]
+  amountEach: number
+  randomness: string
+  t: number
+}
+
+export type ProfileDto = { wallet: string; displayName: string | null; createdAt: number; updatedAt: number }
+
+export type ArenaSnapshot = {
+  round: RoundDto | null
+  recentRounds: RoundDto[]
+  trades: TradeDto[]
+  points: PointDto[]
+  closes: CloseDto[]
+  traders: TraderDto[]
+  anonymous: number
+  online: number
+  chat: ChatDto[]
+  cheers: CheersDto[]
+  serverTime: number
+}
+
+export type ServiceStatus = {
+  indexer: { lastSig: string | null; lastEventAt: number | null }
+  keeper: { lastRollSig: string | null; lastRollAt: number | null }
+}
