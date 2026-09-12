@@ -70,10 +70,10 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 
 | ID | Item | Method | Correct means | Status |
 |---|---|---|---|---|
-| WS-01 | hello → snapshot | B/H | First frame is `snapshot` with the same round as `/api/arena` | NOT RUN |
+| WS-01 | hello → snapshot | B/H | First frame is `snapshot` with the same round as `/api/arena` | PASS (H): `verify-live-ws.ts` got snapshot as the first frame after hello, with round 9 equal to /api/arena round 9. The browser half is re-checked in UI-01 |
 | WS-02 | presence online count | B | A second tab raises `online` by 1 within 2s and drops it within 50s after closing | NOT RUN |
-| WS-03 | chat authenticated | B | Sent message is broadcast to both tabs and present in `/api/chat` after reload | NOT RUN |
-| WS-04 | chat unauthenticated / too long / flood | H | `error` frame each; nothing persisted | NOT RUN |
+| WS-03 | chat authenticated | B | Sent message is broadcast to both tabs and present in `/api/chat` after reload | H half PASS: broadcast reached the sender and a second socket, then persisted to /api/chat · B NOT RUN |
+| WS-04 | chat unauthenticated / too long / flood | H | `error` frame each; nothing persisted | PASS: `verify-live-ws.ts` got error frames for unauthenticated chat, unauthenticated heart, invalid JSON, a message before hello, 281 chars, bpm 400, and a second message within 1s. The flooded message was not broadcast, and only the one valid message was persisted (removed after the run) |
 | WS-05 | trade broadcast | B | An ER trade appears as a `trade` frame within 5s, and on the market chart and leaderboard | NOT RUN |
 | WS-06 | round broadcast | B | At rollover a `round` frame arrives; the UI countdown resets to the new round | NOT RUN |
 | WS-07 | reconnect | B | Server restart or going offline → client reconnects and receives a fresh snapshot; no unhandled error | NOT RUN |
