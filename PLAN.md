@@ -308,10 +308,13 @@ rogs/
 - **P1.04** `DONE` (P0) — `oracle.rs`: typed `PriceUpdateV2` mirror.
   - `read_btc_price(ai, expected_key, now)` checks owner == ORACLE_PROGRAM_ID, discriminator, feed_id == key bytes, posted_slot>0, price>0, age ≤ MAX_PRICE_AGE.
   - Returns `(price i64, decimals u32, publish_time i64)`.
-- **P1.05** `IN PROGRESS` (P0) — Instructions 1–10 per §2.2 with events and errors (`error.rs`).
-- **P1.06** `IN PROGRESS` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
+- **P1.05** `DONE` (P0) — Instructions 1–10 per §2.2 with events and errors (`error.rs`).
+  - *Verified on devnet at 05:15 IST in docs/E2E-RUN.md. The ER ran claim_chips, buy, sell, report_heart, attach_ability (rejected after a sell), settle_player and roll_round, with exact balances.*
+- **P1.06** `DONE` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
+  - *Verified 05:15 IST: the crank resolved round 1 and opened round 2 one second after end_ts, with no keeper process running (packages/arena-sdk/scripts/watch-crank.ts).*
 - **P1.07** `IN PROGRESS` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
-- **P1.08** `IN PROGRESS` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
+- **P1.08** `DONE` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
+  - *commit_player verified 05:16 IST: the base-layer Player account shows the committed trades and balance. commit_arena is compiled but not exercised yet (keeper runs it every 12 rounds).*
 - **P1.09** `DONE` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
   - *Done 04:32 IST: `cargo test -p rogs-arena --lib` gives 22 passed / 0 failed. Covers FPMM vectors, 1,000 randomized solvency sequences, ability caps, the calm-pulse bpm rule, cheers, stats/badges, round alignment, and oracle decode plus rejections.*
   - FPMM: buy→sell round-trip never profits (fee>0), buy shares monotonic in amount, sell out ≤ collateral, invariant `(Y*N) >= k` after every op, zero/overflow guards.
@@ -334,7 +337,8 @@ rogs/
 - **P2.04** `DONE` (P0) — `scripts/bootstrap-arena.ts`: `initialize_arena` (oracle 71wtT…, 300s, 200 USD liquidity, 100 bps, treasury 1,000,000 USD) → `delegate_arena` (validator from P2.01) → wait for router `isDelegated` → `roll_round` on ER (opens round 1) → `schedule_round_crank` (interval 2000ms, iterations 200,000).
   - *Done 05:12 IST: arena `ApzYL11HC9puv4dbFk1QTCrE4wpLup8ta9QE2UKde2CJ`. initialize `5rNzLixYDXJgi5jRXV9y8KrWjbu7S3ifJ2PFX3RU8VdE9cYcCj2aDxtbojAoRBgyGYkVFQpoJT74Y3jNSfZKm62K`; delegate `3zd4N4eyK9VmApBbCYmHJA3o3CEivpceVetGw7pYx6UhAYiRJALK3NB6EjYvrkSQFVkuk1kXngUxYsTWCeFVBMwh`; first roll on the ER `QNfXgdo6QLYL1MnGoGSUrFjywWpcNGUNBvXL4mkjBgNwhZX79jB2v2CWFGu64Vm9V1qabbXrbdozoEq9PRwbHaW` (strike 77,255.71); crank schedule `4sbYLjmct88x4X2LKtanBzmr2u4ZaEWfFf3myfhNsaDmqks652i9ofonSTQDHRBqPiyFag4ahNb4p5DfZk21R4Lf` (task 5441772889676668). Script: `packages/arena-sdk/scripts/bootstrap-arena.ts`.*
   - *Accept:* every signature is printed, and the Arena on ER has `current.status==1` with a strike ≈ live BTC.
-- **P2.05** `IN PROGRESS` (P0) — `scripts/e2e-devnet.ts` (real, repeatable). With two fresh players funded by the deployer:
+- **P2.05** `DONE` (P0) — `scripts/e2e-devnet.ts` (real, repeatable). With two fresh players funded by the deployer:
+  - *Done 05:16 IST: 21/21 steps PASS on devnet (docs/E2E-RUN.md). The Cheers VRF path is covered by e2e-cheers-vrf.ts (see P1.07).*
   - *Running `packages/arena-sdk/scripts/e2e-devnet.ts`, which writes docs/E2E-RUN.md.*
   1. init+delegate, then `createSessionV2`.
   2. `claim_chips` for both.
@@ -410,7 +414,8 @@ rogs/
 - **P5.15** `NOT STARTED` (P0) — Tests updated and green: `bun test` in apps/web. `next build` succeeds with only the §2.6 vars; `tsc --noEmit` is clean (`next-env.d.ts` generated).
 
 ### Phase 6 — Deploy & wire (target: 14:00 IST)
-- **P6.01** `NOT STARTED` (P0) — Railway: `railway init` project `rogs-arena` → service `arena` → set §2.6 vars (Mongo URI from the owner's message, keypairs from `~/.config/solana/rogs-*.json`) → `railway up` → generate domain.
+- **P6.01** `IN PROGRESS` (P0) — Railway: `railway init` project `rogs-arena` → service `arena` → set §2.6 vars (Mongo URI from the owner's message, keypairs from `~/.config/solana/rogs-*.json`) → `railway up` → generate domain.
+  - *Railway project `rogs-arena` d6a31546-6c7b-4070-baec-3a9fec690547, service `arena` 3e2e46cd-3a18-4d63-86f9-2559d9382e4f created 05:17 IST.*
   - *Accept:* `GET https://<domain>/health` returns `{ok:true, mongo:true, er:true, arena:{roundId}}`.
 - **P6.02** `NOT STARTED` (P0) — Atlas network access: confirm Railway can connect (the health `mongo:true`). If it's blocked → `BLOCKED` (the owner must add 0.0.0.0/0 in Atlas; no API key available).
 - **P6.03** `NOT STARTED` (P0) — Vercel: `vercel link` (project `rogs-arena`, root `apps/web`) → env vars → `vercel --prod`.
