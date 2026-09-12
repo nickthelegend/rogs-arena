@@ -53,7 +53,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 
 | ID | Endpoint / case | Method | Correct means | Status |
 |---|---|---|---|---|
-| API-01 | `GET /health` | H | 200 `{ok:true, mongo:true, er:true, programId:"J83q…", arena:{roundId>0,status:1}}` | NOT RUN |
+| API-01 | `GET /health` | H | 200 `{ok:true, mongo:true, er:true, programId:"J83q…", arena:{roundId>0, status:"open", endTs equal to the ER arena}}` (status is a string: idle/open/resolved, per docs/ARENA-API.md) | NOT RUN |
 | API-02 | `GET /api/arena` | H | 200 ArenaSnapshot; `round.roundId` equals the ER arena `current.id`; all arrays present | NOT RUN |
 | API-03 | `GET /api/rounds?limit=5` | H | ≤5 rounds newest first; each resolved one has outcome YES/NO matching the on-chain history | NOT RUN |
 | API-04 | `GET /api/trades?roundId=<n>` | H | Every `TradeExecuted` of that round; `sig` resolvable on the ER; amounts in USD | NOT RUN |

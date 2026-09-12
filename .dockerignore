@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/.turbo
+**/.vercel
+**/target
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.railway
+programs/rogs-arena/test-ledger

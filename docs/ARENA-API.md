@@ -117,7 +117,7 @@ type ArenaSnapshot = {
 
 | Method | Path | Auth | Response |
 |---|---|---|---|
-| GET | `/health` | – | `{ ok, mongo, er, programId, arena: { roundId, status, endTs } \| null, indexer: { lastSig, lastEventAt }, keeper: { lastRollSig, lastRollAt } }` |
+| GET | `/health` | – | `{ ok, mongo, er, programId, arena: { roundId, status: 'idle' \| 'open' \| 'resolved', endTs } \| null, indexer: { lastSig, lastEventAt }, keeper: { lastRollSig, lastRollAt } }` |
 | GET | `/api/arena` | – | `ArenaSnapshot` |
 | GET | `/api/rounds?limit=96` | – | `RoundDto[]` newest first (limit ≤ 200) |
 | GET | `/api/trades?roundId=` | – | `TradeDto[]` ascending |

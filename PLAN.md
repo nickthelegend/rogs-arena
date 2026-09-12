@@ -367,21 +367,21 @@ rogs/
   - *Done 05:05 IST: `packages/arena-sdk` passes 12 bun tests. They cover math vectors identical to Rust, PDAs, oracle decode plus a live BTC/USD read from devnet-as, zero-copy Arena/Player decode, event parsing, and error decoding. `tsc --noEmit` is clean. Gum `createSessionV2` is built from the bundled gpl_session IDL with Anchor 0.32.*
 
 ### Phase 4 — Railway service `apps/arena` (target: 11:00 IST)
-- **P4.01** `IN PROGRESS` (P0) — Scaffold the Bun app (`@apps/arena`).
+- **P4.01** `DONE` (P0) — Scaffold the Bun app (`@apps/arena`).
   - `src/env.ts` (zod; fail fast on missing vars).
   - `src/db.ts` (MongoClient singleton, collections, `createIndexes` at boot).
   - `railway.json` (RAILPACK, start `bun run --filter @apps/arena start`, healthcheck `/health`).
-- **P4.02** `NOT STARTED` (P0) — `src/indexer.ts`: ER `onLogs` → parse → upsert `trades/rounds/settlements/cheers` → broadcast. Backfill from `getSignaturesForAddress` on boot (last 1,000). Idempotent on `sig`.
-- **P4.03** `NOT STARTED` (P0) — `src/keeper.ts`: the watchdog roll, post-roll `settle_player` fan-out, `request_cheers`, crank health check + re-schedule, `commit_arena` every 12 rounds (P1). Every action is logged with its signature.
-- **P4.04** `NOT STARTED` (P0) — `src/realtime.ts`: `Bun.serve` websocket.
+- **P4.02** `DONE` (P0) — `src/indexer.ts`: ER `onLogs` → parse → upsert `trades/rounds/settlements/cheers` → broadcast. Backfill from `getSignaturesForAddress` on boot (last 1,000). Idempotent on `sig`.
+- **P4.03** `IN PROGRESS` (P0) — `src/keeper.ts`: the watchdog roll, post-roll `settle_player` fan-out, `request_cheers`, crank health check + re-schedule, `commit_arena` every 12 rounds (P1). Every action is logged with its signature.
+- **P4.04** `DONE` (P0) — `src/realtime.ts`: `Bun.serve` websocket.
   - Presence map with a 15s heartbeat and 45s TTL (same constants as `packages/shared/src/firebase-path.ts`).
   - Chat persisted to Mongo (auth token required, 280 chars, 1 msg/sec rate limit).
   - Heart broadcast.
   - Snapshot on connect.
-- **P4.05** `NOT STARTED` (P0) — `src/http.ts`: the routes from §2.4, CORS (`CORS_ORIGIN` list), JSON errors with an `error` string (no stack traces).
-- **P4.06** `NOT STARTED` (P0) — Auth: `POST /api/auth/nonce{wallet}` → nonce saved with a 5-minute TTL. `POST /api/auth/verify{wallet, signature}` checks ed25519 (tweetnacl) and returns a 24h token.
-- **P4.07** `NOT STARTED` (P0) — Faucet: `POST /api/faucet` (auth) sends 0.02 devnet SOL from `FAUCET_SECRET_KEY` if the wallet balance is <0.01 SOL. Limits: 1 per wallet per 24h, 5 per IP per 24h (Mongo). Returns the signature.
-- **P4.08** `NOT STARTED` (P0) — Tests (`bun test`): auth verify with a real ed25519 keypair, rate limiter with real Mongo (test DB `rogs_arena_test`, dropped after), event parser on real devnet logs captured in P2.05.
+- **P4.05** `DONE` (P0) — `src/http.ts`: the routes from §2.4, CORS (`CORS_ORIGIN` list), JSON errors with an `error` string (no stack traces).
+- **P4.06** `DONE` (P0) — Auth: `POST /api/auth/nonce{wallet}` → nonce saved with a 5-minute TTL. `POST /api/auth/verify{wallet, signature}` checks ed25519 (tweetnacl) and returns a 24h token.
+- **P4.07** `DONE` (P0) — Faucet: `POST /api/faucet` (auth) sends 0.02 devnet SOL from `FAUCET_SECRET_KEY` if the wallet balance is <0.01 SOL. Limits: 1 per wallet per 24h, 5 per IP per 24h (Mongo). Returns the signature.
+- **P4.08** `DONE` (P0) — Tests (`bun test`): auth verify with a real ed25519 keypair, rate limiter with real Mongo (test DB `rogs_arena_test`, dropped after), event parser on real devnet logs captured in P2.05.
 - **P4.09** `NOT STARTED` (P2) — Bots: `BOTS_ENABLED` with N keypairs funded by the faucet wallet; real ER trades every 20–60s; `users.isBot=true`.
 
 ### Phase 5 — Web backend swap, keep every component (target: 13:00 IST)
