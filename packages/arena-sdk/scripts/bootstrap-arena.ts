@@ -5,7 +5,7 @@
  *   3. roll_round on the ER to open the first round (strike from the BTC/USD oracle)
  *   4. schedule_round_crank so the ER rolls rounds by itself
  *
- * Usage: bun run scripts/bootstrap-arena.ts
+ * Usage: bun run packages/arena-sdk/scripts/bootstrap-arena.ts
  */
 import {
   ArenaInstructions,
@@ -24,7 +24,7 @@ import {
   sendBaseTransaction,
   sendErTransaction,
   waitForDelegation,
-} from '../packages/arena-sdk/src/index'
+} from '../src/index'
 import { loadKeypair } from './lib/keys'
 
 const ROUND_SECONDS = 300

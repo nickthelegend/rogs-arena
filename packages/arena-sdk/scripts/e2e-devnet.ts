@@ -8,7 +8,7 @@
  * commit a player back to Solana. Every step is asserted against the SDK math
  * mirror and written to docs/E2E-RUN.md with signatures.
  *
- * Usage: bun run scripts/e2e-devnet.ts
+ * Usage: bun run packages/arena-sdk/scripts/e2e-devnet.ts
  */
 import { writeFileSync } from 'node:fs'
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from '@solana/web3.js'
@@ -45,7 +45,7 @@ import {
   type ArenaState,
   type PlayerState,
   type SessionKey,
-} from '../packages/arena-sdk/src/index'
+} from '../src/index'
 import { loadKeypair } from './lib/keys'
 
 type Step = { step: string; ok: boolean; detail: string; signature?: string; layer?: 'base' | 'er'; ms?: number }
@@ -258,7 +258,7 @@ function writeReport(arena: ArenaState, owners: string[]) {
     ...steps.map((step, index) => `| ${index + 1} | ${step.step} | ${step.ok ? 'PASS' : 'FAIL'} | ${step.detail.replaceAll('|', '/')} | ${step.signature ? `[${step.signature.slice(0, 8)}…](${explorerTxUrl(step.signature, step.layer ?? 'er')})` : '—'} |`),
     '',
   ]
-  writeFileSync(new URL('../docs/E2E-RUN.md', import.meta.url), lines.join('\n'))
+  writeFileSync(new URL('../../../docs/E2E-RUN.md', import.meta.url), lines.join('\n'))
 }
 
 main().catch((error) => {
