@@ -190,6 +190,52 @@ describe('accounts and events', () => {
     }
   })
 
+  test('parses events emitted under and after CPIs (real devnet VRF logs)', () => {
+    // CheersCallback tx 3acK2K49…: this program runs at depth 2 under the VRF program.
+    const callbackLogs = [
+      'Program ComputeBudget111111111111111111111111111111 invoke [1]',
+      'Program ComputeBudget111111111111111111111111111111 success',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz invoke [1]',
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q invoke [2]',
+      'Program log: Instruction: CheersCallback',
+      'Program data: 5u5eCTZvdt0tBCXvypueAtVho8THLSIdk7PtCPztQKpYGfka1ZfMAQEAAACjH5f+TTZG4G+1C8gardSYtL2+oyiZGwSj623obifJrEBCDwAAAAAASlVELDDMn2ZqcNTMc9uUeGS+8jCC3GWK9TdcMSzHLLUi3qVqAAAAAA==',
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q consumed 21279 of 266305 compute units',
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q success',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz consumed 55283 of 299850 compute units',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz success',
+    ]
+    const [paid] = parseArenaEvents(callbackLogs)
+    expect(paid?.name).toBe('CheersPaid')
+    if (paid?.name === 'CheersPaid') {
+      expect(paid.data.owner.toBase58()).toBe('42j1sjE7LUGWdgD25zVgypDx5jhkzbDCZzWMVzV8RqL4')
+      expect(paid.data.recipients.map((key) => key.toBase58())).toEqual(['BymPzSSHHUbhcw9qB1TLQkzcV2HD17n3mB4Ax2FP9699'])
+      expect(paid.data.amountEach).toBe(1_000_000n)
+      expect(paid.data.randomness).toHaveLength(32)
+    }
+
+    // RequestCheers tx 3z18MVog…: the event is logged after an inner VRF invocation returns.
+    const requestLogs = [
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q invoke [1]',
+      'Program log: Instruction: RequestCheers',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz invoke [2]',
+      'Program log: Idx: 16',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz consumed 15968 of 164187 compute units',
+      'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz success',
+      'Program data: /ZZ5e2xTepwtBCXvypueAtVho8THLSIdk7PtCPztQKpYGfka1ZfMAQEi3qVqAAAAAA==',
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q consumed 55736 of 200000 compute units',
+      'Program J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q success',
+    ]
+    const [requested] = parseArenaEvents(requestLogs)
+    expect(requested?.name).toBe('CheersRequested')
+    if (requested?.name === 'CheersRequested') {
+      expect(requested.data.owner.toBase58()).toBe('42j1sjE7LUGWdgD25zVgypDx5jhkzbDCZzWMVzV8RqL4')
+      expect(requested.data.candidates).toBe(1)
+    }
+
+    // A different program's data line at the same depth is ignored.
+    expect(parseArenaEvents(['Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz invoke [1]', callbackLogs[5], 'Program Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz success'])).toEqual([])
+  })
+
   test('describes anchor errors from logs', () => {
     const logs = ['Program log: AnchorError occurred. Error Code: TradingLocked. Error Number: 6004. Error Message: Trading is locked in the final seconds of the round.']
     expect(describeLogs(logs)).toEqual({ message: 'Trading is locked in the final seconds of the round', code: 6004 })

@@ -128,3 +128,9 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 ## Run log
 
 Findings and fixes are appended here per run: item ID, observed result, root cause, fix commit, re-run result.
+
+### Run 1 — findings so far (2026-09-13, before the app deploy)
+
+| Item | Observed | Root cause | Fix | Re-run |
+|---|---|---|---|---|
+| CH-20 | The VRF callback paid the candidate +1.000000 USD, but `parseArenaEvents` returned no `CheersPaid` for the callback tx `3acK2K49…` or `CheersRequested` for `3z18MVog…` | Anchor `EventParser` loses the invoke stack around CPIs. The callback runs this program at depth 2 under the VRF program, and `request_cheers` logs after an inner VRF invoke | `packages/arena-sdk/src/events.ts` now tracks the invoke stack and decodes `Program data:` only when this program is on top. A regression test uses both real devnet log arrays | PASS: the live tx `3acK2K49…` decodes `CheersPaid{recipients:[BymPz…], amountEach:1000000, randomness:32 bytes}`; SDK tests 13/13 |

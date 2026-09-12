@@ -1,4 +1,3 @@
-import { EventParser } from '@coral-xyz/anchor'
 import { PublicKey } from '@solana/web3.js'
 
 import { arenaCoder } from './accounts'
@@ -168,12 +167,34 @@ function normalize(name: string, d: Raw): ArenaEvent | null {
   }
 }
 
-/** Decodes every rogs_arena event in a transaction's logs, in emission order. */
+const DATA_PREFIX = 'Program data: '
+
+/**
+ * Decodes every rogs_arena event in a transaction's logs, in emission order.
+ *
+ * Tracks the invoke stack itself instead of using Anchor's EventParser, which
+ * drops events emitted around CPIs: the VRF callback runs this program at
+ * depth 2 under the VRF program, and request_cheers logs its event right after
+ * an inner VRF invocation.
+ */
 export function parseArenaEvents(logs: string[], programId: PublicKey = PROGRAM_ID): ArenaEvent[] {
-  const parser = new EventParser(programId, arenaCoder)
+  const target = programId.toBase58()
+  const stack: string[] = []
   const events: ArenaEvent[] = []
-  for (const event of parser.parseLogs(logs)) {
-    const normalized = normalize(event.name, event.data as Raw)
+  for (const line of logs) {
+    const invoke = /^Program (\w+) invoke \[\d+\]$/.exec(line)
+    if (invoke) {
+      stack.push(invoke[1])
+      continue
+    }
+    if (/^Program \w+ (success|failed)/.test(line)) {
+      stack.pop()
+      continue
+    }
+    if (!line.startsWith(DATA_PREFIX) || stack[stack.length - 1] !== target) continue
+    const decoded = arenaCoder.events.decode(line.slice(DATA_PREFIX.length))
+    if (!decoded) continue
+    const normalized = normalize(decoded.name, decoded.data as Raw)
     if (normalized) events.push(normalized)
   }
   return events
