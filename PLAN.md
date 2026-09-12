@@ -304,7 +304,7 @@ rogs/
   - *Accept:* `anchor build` compiles an empty `#[ephemeral] #[program]`.
 - **P1.02** `DONE` (P0) — `state.rs`: `Arena` (zero_copy, Pod structs, explicit padding), `RoundState`, `RoundSummary`, `Player`, `Position`, constants.
   - *Accept:* size asserts in unit tests: `size_of::<Arena>() <= 10_000`, `Player::INIT_SPACE` matches.
-- **P1.03** `IN PROGRESS` (P0) — `math.rs`: FPMM `quote_buy`, `quote_sell` (isqrt u128), `yes_price_bps`, `resolve_split`, `settle_slot` (payout/profit/bonus), all pure functions with checked arithmetic.
+- **P1.03** `DONE` (P0) — `math.rs`: FPMM `quote_buy`, `quote_sell` (isqrt u128), `yes_price_bps`, `resolve_split`, `settle_slot` (payout/profit/bonus), all pure functions with checked arithmetic.
 - **P1.04** `DONE` (P0) — `oracle.rs`: typed `PriceUpdateV2` mirror.
   - `read_btc_price(ai, expected_key, now)` checks owner == ORACLE_PROGRAM_ID, discriminator, feed_id == key bytes, posted_slot>0, price>0, age ≤ MAX_PRICE_AGE.
   - Returns `(price i64, decimals u32, publish_time i64)`.
@@ -312,7 +312,8 @@ rogs/
 - **P1.06** `IN PROGRESS` (P1) — `schedule_round_crank` (ScheduleCrankCpi, mirror `crank-counter/anchor`).
 - **P1.07** `IN PROGRESS` (P1) — `request_cheers` + `cheers_callback` (VRF, mirror `fogduel lib.rs:679-743, 1236-1266`; ephemeral queue). Callback writes candidate Players from `remaining_accounts` safely: deserialize, mutate, `exit`.
 - **P1.08** `IN PROGRESS` (P1) — `commit_arena`, `commit_player`, `undelegate_player` via `MagicIntentBundleBuilder` (deprecated free functions are forbidden).
-- **P1.09** `IN PROGRESS` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
+- **P1.09** `DONE` (P0) — Rust unit tests (`cargo test -p rogs-arena`). Every assertion uses explicit numbers.
+  - *Done 04:32 IST: `cargo test -p rogs-arena --lib` gives 22 passed / 0 failed. Covers FPMM vectors, 1,000 randomized solvency sequences, ability caps, the calm-pulse bpm rule, cheers, stats/badges, round alignment, and oracle decode plus rejections.*
   - FPMM: buy→sell round-trip never profits (fee>0), buy shares monotonic in amount, sell out ≤ collateral, invariant `(Y*N) >= k` after every op, zero/overflow guards.
   - Resolve/settle: collateral conservation (house_back + claims == collateral) for YES/NO/VOID across randomized sequences (deterministic seed loop, 1,000 cases).
   - Abilities: double cap at 10, protect cap at 10, calm requires bpm<120 and freshness (bpm 119 pays, 120 doesn't, stale doesn't), cheers pending only on win.
@@ -326,12 +327,15 @@ rogs/
 
 ### Phase 2 — Devnet deploy, bootstrap, real E2E (target: 09:30 IST)
 - **P2.01** `DONE` (P0) — Confirm the ER validator identity: `curl devnet-as getIdentity`. Record it in §2.7 and `packages/arena-sdk/src/constants.ts`.
-- **P2.02** `NOT STARTED` (P0) — `anchor deploy --provider.cluster devnet` with `rogs-deployer`.
+- **P2.02** `DONE` (P0) — `anchor deploy --provider.cluster devnet` with `rogs-deployer`.
+  - *Done 04:33 IST: deploy tx `5vthq6k395hxPFrTg3DVrR9a28X2WKxNPbcn93k3cRJgmCJ1FMfTotSb4UaLYbXS679F6Z7HmBzRyCBp7mysdgkC`, 654,792 bytes, upgrade authority `Ens1TxKQ…`.*
   - *Accept:* `solana program show <PROGRAM_ID> --url devnet` shows authority `Ens1…`.
 - **P2.03** `DONE` (P0) — Generate the operational keypairs in `~/.config/solana/rogs-{keeper,faucet}.json` and fund them from the deployer: keeper 0.5 SOL, faucet 2 SOL.
-- **P2.04** `NOT STARTED` (P0) — `scripts/bootstrap-arena.ts`: `initialize_arena` (oracle 71wtT…, 300s, 200 USD liquidity, 100 bps, treasury 1,000,000 USD) → `delegate_arena` (validator from P2.01) → wait for router `isDelegated` → `roll_round` on ER (opens round 1) → `schedule_round_crank` (interval 2000ms, iterations 200,000).
+- **P2.04** `DONE` (P0) — `scripts/bootstrap-arena.ts`: `initialize_arena` (oracle 71wtT…, 300s, 200 USD liquidity, 100 bps, treasury 1,000,000 USD) → `delegate_arena` (validator from P2.01) → wait for router `isDelegated` → `roll_round` on ER (opens round 1) → `schedule_round_crank` (interval 2000ms, iterations 200,000).
+  - *Done 05:12 IST: arena `ApzYL11HC9puv4dbFk1QTCrE4wpLup8ta9QE2UKde2CJ`. initialize `5rNzLixYDXJgi5jRXV9y8KrWjbu7S3ifJ2PFX3RU8VdE9cYcCj2aDxtbojAoRBgyGYkVFQpoJT74Y3jNSfZKm62K`; delegate `3zd4N4eyK9VmApBbCYmHJA3o3CEivpceVetGw7pYx6UhAYiRJALK3NB6EjYvrkSQFVkuk1kXngUxYsTWCeFVBMwh`; first roll on the ER `QNfXgdo6QLYL1MnGoGSUrFjywWpcNGUNBvXL4mkjBgNwhZX79jB2v2CWFGu64Vm9V1qabbXrbdozoEq9PRwbHaW` (strike 77,255.71); crank schedule `4sbYLjmct88x4X2LKtanBzmr2u4ZaEWfFf3myfhNsaDmqks652i9ofonSTQDHRBqPiyFag4ahNb4p5DfZk21R4Lf` (task 5441772889676668). Script: `packages/arena-sdk/scripts/bootstrap-arena.ts`.*
   - *Accept:* every signature is printed, and the Arena on ER has `current.status==1` with a strike ≈ live BTC.
-- **P2.05** `NOT STARTED` (P0) — `scripts/e2e-devnet.ts` (real, repeatable). With two fresh players funded by the deployer:
+- **P2.05** `IN PROGRESS` (P0) — `scripts/e2e-devnet.ts` (real, repeatable). With two fresh players funded by the deployer:
+  - *Running `packages/arena-sdk/scripts/e2e-devnet.ts`, which writes docs/E2E-RUN.md.*
   1. init+delegate, then `createSessionV2`.
   2. `claim_chips` for both.
   3. P1 buys YES $5 with Calm; P2 buys NO $5 with Cheers.
@@ -345,16 +349,17 @@ rogs/
 - **P2.06** `NOT STARTED` (P1) — `tests/rogs-arena.ts` (anchor test against a local validator) for base-only paths: initialize, init_player, delegate account-owner change, access control (non-owner buy rejected, wrong session authority rejected).
 
 ### Phase 3 — `packages/arena-sdk` (target: 09:00 IST, can overlap with Phase 2)
-- **P3.01** `NOT STARTED` (P0) — Package scaffold (`@rogs/arena-sdk`, TS source exports). Deps: `@coral-xyz/anchor@0.32.1`, `@solana/web3.js@^1.98`, `@magicblock-labs/ephemeral-rollups-sdk@0.17.0`, `@magicblock-labs/gum-sdk@^3.0.10`, `bn.js`.
-- **P3.02** `NOT STARTED` (P0) — `constants.ts`, `pda.ts` (arena, player, sessionTokenV2), `idl.ts` (copy of the IDL + types).
-- **P3.03** `NOT STARTED` (P0) — `oracle.ts`: `decodePriceUpdate(buf)` → `{price, decimals, publishTime, postedSlot}`; `subscribeBtcPrice(conn, cb)`.
-- **P3.04** `NOT STARTED` (P0) — `accounts.ts`: decode the zero-copy Arena with the Anchor coder; Player fetch/subscribe; the `ArenaMarket` adapter used by `use-current-market`.
-- **P3.05** `NOT STARTED` (P0) — `math.ts`: TS mirror of the FPMM + settlement. Unit tests (`bun test`) cross-check fixed vectors emitted by the Rust tests.
-- **P3.06** `NOT STARTED` (P0) — `tx.ts`: builders and senders.
+- **P3.01** `DONE` (P0) — Package scaffold (`@rogs/arena-sdk`, TS source exports). Deps: `@coral-xyz/anchor@0.32.1`, `@solana/web3.js@^1.98`, `@magicblock-labs/ephemeral-rollups-sdk@0.17.0`, `@magicblock-labs/gum-sdk@^3.0.10`, `bn.js`.
+- **P3.02** `DONE` (P0) — `constants.ts`, `pda.ts` (arena, player, sessionTokenV2), `idl.ts` (copy of the IDL + types).
+- **P3.03** `DONE` (P0) — `oracle.ts`: `decodePriceUpdate(buf)` → `{price, decimals, publishTime, postedSlot}`; `subscribeBtcPrice(conn, cb)`.
+- **P3.04** `DONE` (P0) — `accounts.ts`: decode the zero-copy Arena with the Anchor coder; Player fetch/subscribe; the `ArenaMarket` adapter used by `use-current-market`.
+- **P3.05** `DONE` (P0) — `math.ts`: TS mirror of the FPMM + settlement. Unit tests (`bun test`) cross-check fixed vectors emitted by the Rust tests.
+- **P3.06** `DONE` (P0) — `tx.ts`: builders and senders.
   - Builders: `initAndDelegatePlayer`, `createSession`, `claimChips`, `buy`, `sell`, `settlePlayer`, `reportHeart`, `requestCheers`, `rollRound`, `commitArena`.
   - `sendErTx` uses an ER blockhash and confirms; on error it fetches logs and surfaces the AnchorError message (pattern `binaryPrediction.ts:384-459`).
   - `getDelegationStatus` goes through the router.
-- **P3.07** `NOT STARTED` (P0) — `events.ts`: `parseArenaEvents(logs)` via the Anchor `EventParser`.
+- **P3.07** `DONE` (P0) — `events.ts`: `parseArenaEvents(logs)` via the Anchor `EventParser`.
+  - *Done 05:05 IST: `packages/arena-sdk` passes 12 bun tests. They cover math vectors identical to Rust, PDAs, oracle decode plus a live BTC/USD read from devnet-as, zero-copy Arena/Player decode, event parsing, and error decoding. `tsc --noEmit` is clean. Gum `createSessionV2` is built from the bundled gpl_session IDL with Anchor 0.32.*
 
 ### Phase 4 — Railway service `apps/arena` (target: 11:00 IST)
 - **P4.01** `IN PROGRESS` (P0) — Scaffold the Bun app (`@apps/arena`).
