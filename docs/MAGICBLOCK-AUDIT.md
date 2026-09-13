@@ -23,11 +23,11 @@ Audited 2026-09-12 23:10–23:30 UTC (2026-09-13 ~04:50 IST). The audit read cod
 - **Also proven live (corrected after the audit):** VRF Cheers (request `3z18MVog…`, callback `3acK2K49…`) and the router `getDelegationStatus` call (`packages/arena-sdk/scripts/check-delegation.ts`).
 - **Not proven live:** `undelegate_player`.
 - **Not integrated at all:** Private ER, eSPL, private payments, Magic Actions and ephemeral accounts.
-- **Not reachable by a judge through the product.** `apps/web` source never imports `@rogs/arena-sdk`; the only mention is `apps/web/package.json:16`.
-  - `hooks/use-trading.ts:30,43` still uses Privy.
-  - `hooks/use-current-market.ts:4` and `features/chart-btc/index.tsx:17-18` still use the Somnia SDK.
-  - There is no `/proof` route; `apps/web/app` holds only `layout.tsx` and `page.tsx`.
-  - `apps/arena` has no keeper and no indexer. `src/chain.ts:132-150` only has send helpers, and `src/types.ts:104-105` holds status fields that nothing fills.
+- **Update after the audit (2026-09-13 ~01:05 UTC): now reachable through the product.** The bullets below replace the audit-time finding that the web app was unwired and the service had no keeper or indexer.
+  - `apps/web` trades through `@rogs/arena-sdk`: guest or Wallet Standard wallet, Player init+delegate, Gum session key, claim, buy and sell on the ER, verified in the live UI (TEST-PLAN UI-08, UI-10, UI-12).
+  - Market, chart and countdown come from the Arena on the ER and the pricing oracle (UI-02, UI-03, UI-04).
+  - `/proof` shows live router delegation status, crank task and last roll, oracle price and age, the last VRF Cheers callback, and commit counters (UI-24).
+  - `apps/arena` runs an indexer (backfill verified with the indexer switched off, IDX-02) and a keeper that settles positions within 1-2 s of the crank roll (KPR-01) and commits the Arena (the counter reached 2; the Solana snapshot moved from round 2 to round 13).
 
 **Live state at 23:20–23:23 UTC, read-only:**
 - **Crank:** it opened round 3 at 23:20:01 for an `end_ts` of 23:20:00. No keeper code exists anywhere, so the crank is the only thing that could have rolled it.
@@ -38,7 +38,7 @@ Audited 2026-09-12 23:10–23:30 UTC (2026-09-13 ~04:50 IST). The audit read cod
 
 ### 1.2 Touchpoint table
 
-The last column covers the web UI only. Nothing there is verified, and every web surface is currently unwired.
+The last column covers the web UI. At audit time nothing there was wired; rows marked VERIFIED were checked in the live UI afterwards.
 
 | # | Touchpoint | Program / SDK status | Evidence (step in `docs/E2E-RUN.md` unless noted) | File:line | Web UI |
 |---|---|---|---|---|---|
@@ -51,7 +51,7 @@ The last column covers the web UI only. Nothing there is verified, and every web
 | 7 | Rust SDK `crank` feature (`ScheduleCrankCpi`) | **IMPORTED BUT UNUSED** | The feature is enabled, but scheduling hand-serializes `MagicBlockInstruction::ScheduleTask` with bincode | `Cargo.toml:24,28`; `lib.rs:760-765` | n/a |
 | 8 | VRF (`request_cheers` / `cheers_callback`) | **GENUINELY USED** (corrected after the audit) | `e2e-cheers-vrf.ts` deterministic run, section "Cheers via MagicBlock VRF" in `docs/E2E-RUN.md`: `request_cheers` on the ephemeral queue `3z18MVog…`; the VRF program invoked `cheers_callback` in `3acK2K49…`, which paid the candidate +1.000000 USD and emitted `CheersPaid` with randomness `4a55442c…2cb5` (TEST-PLAN CH-20). Main E2E step 19 was not exercised, not a pass | `lib.rs:598-728`, `lib.rs:999-1020`; `math.rs:283`; `tx.ts:184-198` | PENDING (not wired) |
 | 9 | `commit_player` (`MagicIntentBundleBuilder.commit`) | **GENUINELY USED** | Step 20 `Np1fntai…`; step 21 base shows trades 1 and balance 264.780446 | `lib.rs:830-840`, `lib.rs:1054-1066` | PENDING |
-| 10 | `commit_arena` | **GENUINELY USED (once, manually)** | `2qc96JkV…`: base went from round 0 / 0 trades to round 2 / 6 trades and stayed delegated. The keeper that runs it "every 12 rounds" does not exist | `lib.rs:809-827`; `commit-arena.ts:36-44` | n/a |
+| 10 | `commit_arena` | **GENUINELY USED (once, manually)** | `2qc96JkV…`: base went from round 0 / 0 trades to round 2 / 6 trades and stayed delegated. Update: the Railway keeper now commits every 12 resolved rounds (capped at 9 per delegation); the on-chain counter reached 2 and the Solana snapshot advanced to round 13 / 21 trades | `lib.rs:809-827`; `commit-arena.ts:36-44` | n/a |
 | 11 | `undelegate_player` (`commit_and_undelegate`) | **GENUINELY USED** (verified after the audit) | `scripts/verify-undelegate.ts`: ER tx `3sCuC1UP…` undelegated Player `ENnMBsqQ…`, which came back owned by the program on Solana with its 250.000000 USD ER balance. The router switched from `isDelegated: true` to `false`, and re-delegation `2HBvpN1P…` kept the balance on the ER. Section "Player undelegate and re-delegate" in `docs/E2E-RUN.md` | `lib.rs:843-853`; `tx.ts:228-233` | PENDING (not wired) |
 | 12 | Magic Router `getDelegationStatus` | **USED IN SCRIPTS ONLY** (corrected after the audit) | One call site: `scripts/check-delegation.ts`, which returned `isDelegated: true` and fqdn `devnet-as` for the Arena. The E2E uses `waitForDelegation`, which compares base/ER owners. Transactions go straight to `devnet-as`, not through the router. Web and service have no call site yet | `connections.ts:25-36`, `:58-69`; `check-delegation.ts:7`; `constants.ts:81-87` | PENDING |
 | 13 | Commitment signature (`GetCommitmentSignature`) | **MISSING** | PLAN §2.3 promises it; only the ER scheduling sig is recorded | — | — |
