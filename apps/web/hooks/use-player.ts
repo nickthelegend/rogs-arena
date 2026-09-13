@@ -31,7 +31,8 @@ export type PlayerContextValue = {
   player: PlayerState | null
   isLoading: boolean
   error: string | null
-  refresh: () => Promise<PlayerState | null>
+  /** Reads a Player from the rollup by address (default: the connected wallet) and updates the shared snapshot when it is the connected wallet's. */
+  refresh: (target?: string) => Promise<PlayerState | null>
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null)
@@ -78,12 +79,17 @@ function usePlayerLoader(): PlayerContextValue {
     }
   }, [connections, owner, programId])
 
-  const refresh = useCallback(async () => {
-    if (!owner) return null
-    const player = await fetchPlayer(connections.er, new PublicKey(owner), programId)
-    setSnapshot({ owner, player, loaded: true, error: null })
-    return player
-  }, [connections, owner, programId])
+  const refresh = useCallback(
+    async (target?: string) => {
+      // Callers pass the address they need: a guest wallet connects mid-setup, when this closure still has no owner.
+      const address = target ?? owner
+      if (!address) return null
+      const player = await fetchPlayer(connections.er, new PublicKey(address), programId)
+      if (address === owner) setSnapshot({ owner: address, player, loaded: true, error: null })
+      return player
+    },
+    [connections, owner, programId],
+  )
 
   const current = owner != null && snapshot.owner === owner
 

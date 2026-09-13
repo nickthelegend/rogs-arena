@@ -34,7 +34,6 @@ import {
 import {
   createSessionKey,
   ensurePlayerDelegated,
-  fetchPlayer,
   keypairSigner,
   sendErTransaction,
   type WalletSigner,
@@ -239,13 +238,8 @@ function useTradeSetupController() {
     } as unknown as WalletSigner
   }, [])
 
-  const readPlayer = useCallback(
-    async (owner: string) => {
-      if (walletRef.current.publicKey?.toBase58() === owner) return refreshPlayer()
-      return fetchPlayer(chain.connections.er, new PublicKey(owner), chain.programId)
-    },
-    [chain, refreshPlayer],
-  )
+  // Read by address, never through the render-time owner: during guest setup the wallet connects after this render.
+  const readPlayer = useCallback((owner: string) => refreshPlayer(owner), [refreshPlayer])
 
   const waitForLamports = useCallback(
     async (owner: string, minimum: bigint, signature: string) => {
