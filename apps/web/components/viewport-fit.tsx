@@ -34,10 +34,13 @@ export function ViewportFit({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  if (!fit) return <>{children}</>
+  // The wrapper element is always rendered so switching fit on or off never remounts the app (a remount would
+  // restart every data effect and abort its in-flight requests). Unfitted it is display: contents.
   return (
-    // The page's own w-screen/h-screen would resolve to the unzoomed viewport; inside the fit it fills the canvas.
-    <div className="overflow-hidden [&>main]:h-full [&>main]:w-full" style={{ zoom: fit.zoom, width: fit.width, height: fit.height }}>
+    <div
+      className={fit ? 'overflow-hidden [&>main]:h-full [&>main]:w-full' : 'contents'}
+      style={fit ? { zoom: fit.zoom, width: fit.width, height: fit.height } : undefined}
+    >
       {children}
     </div>
   )

@@ -1,3 +1,4 @@
+import { closeSocket } from '@/lib/socket-close'
 import { env } from '@/env'
 import { getArenaSnapshot, getCloses, getPoints, getTrades } from '@/lib/arena-api'
 import {
@@ -116,7 +117,7 @@ class ArenaRealtimeClient {
 
     // The server binds a connection's identity at `hello`, so a sign-in or sign-out reopens this tab's socket.
     this.detach('Your arena sign-in changed before the server confirmed your message.')
-    socket.close(1000, 'auth changed')
+    closeSocket(socket, 1000, 'auth changed')
     this.attempt = 0
     this.open()
   }
@@ -413,7 +414,7 @@ class ArenaRealtimeClient {
 
     const socket = this.socket
     this.detach('The chat connection closed before the server confirmed your message.')
-    socket?.close(1000, 'client stopped')
+    if (socket) closeSocket(socket, 1000, 'client stopped')
     getArenaRealtimeStore().setState({ connection: 'idle' })
   }
 }
