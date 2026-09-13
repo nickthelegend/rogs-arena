@@ -1,5 +1,6 @@
 'use client'
 
+import { CoinLogo } from '@/components/coin-logo'
 import { useCurrentMarket } from '@/hooks/use-current-market'
 import { useMarketPrice } from '@/hooks/use-market-price'
 import { useNarrowLayout } from '@/hooks/use-narrow-layout'
@@ -56,7 +57,8 @@ function MarketPriceFeed() {
     <section className="section-panel flex min-h-0 flex-col overflow-hidden p-2 px-0 relative max-md:h-[340px] max-md:flex-none">
       <header className="mb-2 flex flex-none items-start justify-between gap-4 absolute top-3 right-3 max-md:static max-md:justify-end max-md:px-3 max-md:pt-1">
         <div className="text-right">
-          <p className="font-sans text-[28px] font-medium tabular-nums tracking-tight text-white">
+          <p className="flex items-center justify-end gap-2 font-sans text-[28px] font-medium tabular-nums tracking-tight text-white">
+            <CoinLogo symbol={symbol} className="size-7" />
             {formatMarketPrice(latestValue, decimals)}
           </p>
           <p

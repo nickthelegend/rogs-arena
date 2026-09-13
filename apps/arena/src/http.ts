@@ -247,6 +247,7 @@ async function health(ctx: HttpContext): Promise<Routed> {
       markets,
       indexer: { ...ctx.status.indexer },
       keeper: { ...ctx.status.keeper },
+      prices: { ...ctx.status.prices },
     },
   }
 }

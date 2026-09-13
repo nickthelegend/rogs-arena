@@ -1,5 +1,6 @@
 'use client'
 
+import { CoinLogo } from '@/components/coin-logo'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { useMarketBoard, type MarketBoardEntry } from '@/hooks/use-market-board'
 import { useSelectedMarket } from '@/hooks/use-market-selection'
@@ -86,7 +87,10 @@ function MarketTile({
         />
       ) : null}
       <span className={cn('relative flex items-center justify-between gap-2', disabled && 'opacity-50')}>
-        <span className="font-abc-gravity-italic text-[22px] leading-none text-white">{entry.symbol}</span>
+        <span className="flex items-center gap-2">
+          <CoinLogo symbol={entry.symbol} className="size-5" />
+          <span className="font-abc-gravity-italic text-[22px] leading-none text-white">{entry.symbol}</span>
+        </span>
         <span
           aria-hidden
           className="size-2 shrink-0 rounded-full"
@@ -309,6 +313,7 @@ export default function MarketSelector() {
           'hover:bg-white/10 focus-visible:bg-white/10 data-[open=true]:bg-white/10',
         )}
       >
+        <CoinLogo symbol={symbol} className="size-6" />
         <span>{symbol}</span>
         <svg
           aria-hidden
