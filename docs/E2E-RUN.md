@@ -1,31 +1,31 @@
 # E2E devnet run
 
-Run at 2026-09-12T23:15:07.809Z against program `J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q`, MagicBlock ER `devnet-as`.
-Players: `75hZaAkk1Cnv1mctMQvSa9rGKLxtcvJm6WXxKYhT2qfE`, `DjYUFBgaPSQoyeUSa1BU1e2p2e92FSWuS7SAHzUXChYi`. Arena round now 2, treasury 999287.75 USD.
+Run at 2026-09-13T05:25:08.773Z against program `J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q`, MagicBlock ER `devnet-as`.
+Players: `7RvUJJp2HmnUT8iGCo7tCoaKnEpT2646vLxwJcMQmeJp`, `HLLUrunz89zKoVkV84AkNH3swXUihUzBw9QYQ6qUkbjo`. Arena round now 76, treasury 988061.30 USD.
 
 | # | Step | Result | Detail | Transaction |
 |---|---|---|---|---|
-| 1 | fund players | PASS | 75hZaAkk1Cnv1mctMQvSa9rGKLxtcvJm6WXxKYhT2qfE, DjYUFBgaPSQoyeUSa1BU1e2p2e92FSWuS7SAHzUXChYi | [4bQ2K3U2…](https://explorer.solana.com/tx/4bQ2K3U2Xkhg4HKTbLxHw7v7qG9kFcxc1wbYqxppyzD1driaEKQTjqw3CZkeTBnNXUQfFkXi3EwxJr7m1z3oFS9i?cluster=devnet) |
-| 2 | P1 init+delegate player | PASS | F6Ht4ykBNX5yYhrEdgndF5eWumxuRzTmJ1a7ZmDjGw6 | [2Hap4Rjf…](https://explorer.solana.com/tx/2Hap4RjfnYRRXaC2MkDQvw4TkNaEHgyAzZtJ3GjAs8nJTePZWssXG7ipqSrC4ck1n5mGcpfswEDhJBJXtK8wyoPR?cluster=devnet) |
-| 3 | P1 create session key | PASS | signer 4BZVFzEerPXAdvY6DaxXTjKZj1mrcMzCL9pRshMpBuSp token 6kx7AdQvcn25py44NeaTdgy3Pdwyz2ioqGqjaS9H6Yin | [4tEVFnMu…](https://explorer.solana.com/tx/4tEVFnMuy4aC4QQtRSJ4wta4hqnvQuaBY4BUCbdRAHQnXVbPK8BrpUhjd8MdmTdhHVfBWyfFeBs3BRvzWgp8BsZV?cluster=devnet) |
-| 4 | P2 init+delegate player | PASS | 2qajnhQrFXzWRJRYnu5zcyirhQFzkBhDFnhQ7JL1AQZB | [2dptWrsB…](https://explorer.solana.com/tx/2dptWrsBVPcV7XqgNXEMBxitXtyzMZ3rhEoJ9y17ZRr1WhkBnSfrGs6E58KBHXxkc9zUpzCUJmAxMQv1Fyq2ae3p?cluster=devnet) |
-| 5 | P2 create session key | PASS | signer 7JV9t9gcjrLsXHixecmZ4FqDMVC4dshXxkJSNKjYB5qC token 3S9Te9AhpssZrQ8FcfwVTECDm9UQfEnSvgbcTvdUZSg6 | [4qiJiSZG…](https://explorer.solana.com/tx/4qiJiSZGwt27SaUPHNe33mNSeYocEzt6P6ojdpaAhKmyV4gHhWGtBc7UFRXbWAj4t6HJr4tpPzR2TeaQRrFGQZzQ?cluster=devnet) |
-| 6 | P1 claim_chips via session key | PASS | balance 250.000000 USD | [41XV3Ute…](https://solscan.io/tx/41XV3UteUrU4jnRKF2CFVmoroazvAW5GFBG9cSjBW9AAu3G1tqQqVBTvoLaicU5mMpA41pcwvjrcTDX4GgvHm1u8?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 7 | P2 claim_chips via session key | PASS | balance 250.000000 USD | [3zzHGQiY…](https://solscan.io/tx/3zzHGQiYPan8bgSMrmhZpoY1fameikFhu9UDUdKzx9489PqTUrhg36uxYaR3QwNQSegddz9V6F8E5gY2MYFeVMP5?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 8 | round open | PASS | round 1 strike 7725570971918 ends 2026-09-12T23:15:00.000Z | — |
-| 9 | P1 report_heart 80 bpm | PASS | on-chain heart rate | [2p5NfkAw…](https://solscan.io/tx/2p5NfkAwZGe73nk1XgBBMSnv2GQ3NY14rjotKMF4sez3wNopZuHYGcT4mZD8jZ5Bt4bdTLkc4vvMR2zgoHaSyoWC?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 10 | P1 buy YES $5 + Calm pulse | PASS | shares 9780446 (quote 9780446), maxBpm 80 | [3gh5Mhbz…](https://solscan.io/tx/3gh5MhbzQFBJm2NZRyQ9KyMnivgJNTy64AvqLFqfECZRVPU1NkG9aZrizSri7WTUimJFhfn4VK9uavzyeHynDivM?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 1 | fund players | PASS | 7RvUJJp2HmnUT8iGCo7tCoaKnEpT2646vLxwJcMQmeJp, HLLUrunz89zKoVkV84AkNH3swXUihUzBw9QYQ6qUkbjo | [UyjYGYVQ…](https://explorer.solana.com/tx/UyjYGYVQAaEWWz9DSMdCUzDSCKcEqUrxUWhFXxa9RSVyMSrrJyrSjAiv2tKjFta8CGMFoqsApgyCqtZb2T35C1z?cluster=devnet) |
+| 2 | P1 init+delegate player | PASS | 7JdgsEM98Qu31KRx7AVEMbHrLD6udFUiiJ9twjCUthDs | [45aFb1qC…](https://explorer.solana.com/tx/45aFb1qCwhx3uNvtiBgeoguv89JwVyErgQ9vMFZQbyBMS739Y6DF1Ngw6LHRsPSjwgFdeGRf8K9jXj31NxSpw9H6?cluster=devnet) |
+| 3 | P1 create session key | PASS | signer 2WyLV9Bt2CAcperkR6Dh5C962n5rkaPeHt7MfJvN5LMV token 9vwFbsazWb2pvHqyqt78hif8t2dwd19s1WVgyCrVRsyx | [3kuNfiMk…](https://explorer.solana.com/tx/3kuNfiMkbmvjR7DPgg2t2N7ZWAz8wLQpQcYFgo8mV15zweXyh7c4oo8XoLnvVqtepDNBgtMPyogbrpNbsoGqsZXE?cluster=devnet) |
+| 4 | P2 init+delegate player | PASS | 3657tuxcyJsSHDJfc5VEQdv5KTPjhxypLbnTkyXyn7Wt | [3nEw1YDA…](https://explorer.solana.com/tx/3nEw1YDAr7x9AGeesk5WUFzswQqkbmoHrbKuMn4BtsR9HaZ74btPy6mEfvU7ytU9YxYRfdJZU2rirSN13v81qtyG?cluster=devnet) |
+| 5 | P2 create session key | PASS | signer CvZddGEzptLZ4hSHVxAWwJ28hCuZA8EwQ9LWx68qLfdH token 8JFxCqK3365r8BeLix7ZnmXKBNP6qZbut5PjuN4A3Kbp | [5WzMz6DG…](https://explorer.solana.com/tx/5WzMz6DGEEfNFSdjUdsaA2Aqok7yRGLXubf1rGC9gmba28y2NQTCHvnhj5yp5kbxML9zZELj5PY7HLZgSJiQ9cgo?cluster=devnet) |
+| 6 | P1 claim_chips via session key | PASS | balance 250.000000 USD | [4j3dKF4r…](https://solscan.io/tx/4j3dKF4rF1PyZHx8VCewQhPzKqY31HySogq1rNwCqGkE6JefG2y7vxL1EBPF7begn1aEustSeivMkqPT7mVKvGJc?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 7 | P2 claim_chips via session key | PASS | balance 250.000000 USD | [2BwM5emA…](https://solscan.io/tx/2BwM5emAFx3FqXYM5EvX75RxL4bwoN5xULmy6EqhQrPjWVb81twSWP6kg7Xd9MCAiCHtWc56PtRTWqfqTWVZDgkj?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 8 | round open | PASS | round 75 strike 7723653118316 ends 2026-09-13T05:25:00.000Z | — |
+| 9 | P1 report_heart 80 bpm | PASS | on-chain heart rate | [3467UivX…](https://solscan.io/tx/3467UivXmiX3Vxo2TsjE1igGfqWe9BCVWoWhABnfXGyrf6P4TNxWr3yymjP46fszVSDYVurLxLvNZSbHLRgGMjYn?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 10 | P1 buy YES $5 + Calm pulse | PASS | shares 9552616 (quote 9552616), maxBpm 80 | [365dFjb8…](https://solscan.io/tx/365dFjb8gdrM2tKwVgoXU12n3DWmNfhusKnVTk5ECd4HV6q6T5RGHoyiSCNNsBwqMsgzw5b2yEAHT8YtKVCWGBCM?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | 11 | P1 balance after buy | PASS | 245000000 | — |
-| 12 | P2 buy NO $5 + Cheers | PASS | shares 10019482 (quote 10019482) | [woeRhRoT…](https://solscan.io/tx/woeRhRoTxkmNeRQJ6Ctj7hJukMTXnkPMJjR6HPTRfaEyUWYoeZTLsUyDLgokYe9NH3PieVzb4PB6QaAUcx6t39G?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 13 | P2 sell half NO (take profit/stop) | PASS | sold 5009741 shares for 2.465775 USD | [3ege7gTK…](https://solscan.io/tx/3ege7gTK41PizhrAkVuKNnxDTSiVrY7pX4nJWHaEesSwx9jWCGrcxtCDXmwE1aHuiAEUZKme87FN27dFt42Pzqzx?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 14 | P2 balance after buy+sell | PASS | 247465775 | — |
+| 12 | P2 buy NO $5 + Cheers | PASS | shares 10264143 (quote 10264143) | [43atw1c9…](https://solscan.io/tx/43atw1c9ZLwjLenz2smNYC5kqyq7ZnbAzGFoLPj3PWaP94AY1WNAfbaN5vXGKNzpYqXBsyuzLPfL67Ki1J7uDZQo?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 13 | P2 sell half NO (take profit/stop) | PASS | sold 5132071 shares for 2.466515 USD | [CRajLdH4…](https://solscan.io/tx/CRajLdH4kc7rDvZdqVEuMLyD3g8mb1V145wU6ZhmCMRt3NCMzFSspv3qUrFZ9p9rJyGa18L68AJfEBeCDUrGBXC?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 14 | P2 balance after buy+sell | PASS | 247466515 | — |
 | 15 | attach_ability after sell is rejected | PASS | An ability card is already attached to this position | — |
-| 16 | crank rolled the round inside the ER | PASS | outcome YES strike 7725570971918 close 7726266920786, rolled 1s after end | — |
-| 17 | P1 settle_player | PASS | payout 9.780446 profit 4.780446 bonus 10.000000 calm true cheers false; balance delta 19.780446; wins 1 losses 0 calmWins 1 | [3zMLWSBB…](https://solscan.io/tx/3zMLWSBBf65YsxLWh5qk4yta2xPxq5VHC6sHdesmdM1zECiBzWCbVjJddAgeKV4HicwmfDLSFE9N8efSbDJHQtCc?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 18 | P2 settle_player | PASS | payout 0.000000 profit -2.534225 bonus 0.000000 calm false cheers false; balance delta 0.000000; wins 0 losses 1 calmWins 0 | [5dpUySWh…](https://solscan.io/tx/5dpUySWhmdkyKXNcPg7BaQnCm1xmowd6xT6taV87LT37yBBv1XDgpGYcEmgKwy3PfBWPTKsppLswEUoMB5CNsf8Z?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 19 | cheers via VRF | NOT EXERCISED | the Cheers position did not finish in profit this run; VRF Cheers is verified in the deterministic run below | — |
-| 20 | P1 commit_player to Solana | PASS | commit scheduled from the ER | [Np1fntai…](https://solscan.io/tx/Np1fntai7EzWQDYBWvTTRu8oH578suvoy5dfHqAPhnBPug3bCpJfGurGYJDcCkMHXyauj9XmqYgRy9xLT5RK6j2?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
-| 21 | base layer shows committed player state | PASS | trades 1 balance 264.780446 USD | — |
+| 16 | crank rolled the round inside the ER | PASS | outcome YES strike 7723653118316 close 7725107384877, rolled 1s after end | — |
+| 17 | P1 settle_player | PASS | payout 9.552616 profit 4.552616 bonus 10.000000 calm true cheers false; balance delta 19.552616; settled by script; wins 1 losses 0 calmWins 1 | [4p2Z8PU3…](https://solscan.io/tx/4p2Z8PU32yqCBEszAHQS1n5FgqaE5YX2pcFpSbuQeR18H5A43b3K6jdRZ4h425sfNbVEt5ZryEQsnt3rJd6uejLb?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 18 | P2 settle_player | PASS | payout 0.000000 profit -2.533485 bonus 0.000000 calm false cheers false; balance delta 0.000000; settled by script; wins 0 losses 1 calmWins 0 | [2PUqpQF9…](https://solscan.io/tx/2PUqpQF9Wv85Nttk3VKDMnGuhTk8kqKChXYCWy39ThVC5mZhZeiB75to2HRWgdW9uj7YcAXNyGqrFNrpRvNf5dCQ?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 19 | cheers via VRF | NOT EXERCISED | the Cheers position did not finish in profit this run; e2e-cheers-vrf.ts exercises it deterministically | — |
+| 20 | P1 commit_player to Solana | PASS | commit scheduled from the ER | [4eDLFrrN…](https://solscan.io/tx/4eDLFrrNspF7sZEv4bcmWJksQ2z45kjmv64xaouJYWrE5jLezJntyJYNXNxUe9H9V5rkwCSpiKvmjNMFpG8T7g2Z?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| 21 | base layer shows committed player state | PASS | trades 1 balance 264.552616 USD | — |
 
 ## Arena commit to Solana (MagicIntentBundleBuilder)
 
@@ -97,3 +97,18 @@ Run at 2026-09-13T01:05:07.128Z, round 23. P1 `trcZbBkneuEyDipagM4jodA7ZHoX2g6nD
 | request_cheers sent by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [uvTQ8pGy…](https://solscan.io/tx/uvTQ8pGyYKNJSfUcoZ4vwCXnnQ5eWxThJY84e1cuoWFzjWLbBuLbw7LVXc3U438JwfPzjxxwVSNFSHbqwQHKXEv?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | VRF callback paid recent traders | PASS | recipients 10 (incl. P1), 1 USD each, randomness b186e4ee9a49627c… | [5LC56dLU…](https://solscan.io/tx/5LC56dLU8kzKNcEU7Z1ZyjDdQS6aV2JtcfN9kkqbGjb4WFpCmLHj4V9Ke1jJyddvnmNovXQDGuPhUPKoTMaTCf44?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | indexer stored the CheersPaid row | PASS | /api/cheers has 5LC56dLU8k… | — |
+
+## Keeper-driven Cheers via MagicBlock VRF (KPR-02)
+
+Run at 2026-09-13T04:20:37.635Z, round 62. P1 `DLp625rAtS8ZYMaAwPPgUE1YVoSAqBeW4QWHdjMCMTZr`, P2 `H98t7WeEuj723wT4CEo7PghncW7Jz6TbGHAk1ou7tdpK`.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| P2 buys YES $5 with the Cheers card | PASS | round 62 | [Nj6mu16F…](https://solscan.io/tx/Nj6mu16FPXF3f8ntRuU5mouvQdFfvKxS6gRpHyhhdeMq1qN2Jy85xuJgERCxqEDLb6wbHQHQJ84MPax4x6PJKTr?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 buys YES $90 (moves the AMM) | PASS | 262772634 shares | [5XQRNRJ4…](https://solscan.io/tx/5XQRNRJ45iyusQmaaJaVbNEkftv7pjCyLgho9yZvDWipym9r4HcAUWGrxebaMnSU7wxQfG6UQdsv5gxSjMTJVsdf?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P2 sells into the move at a profit | PASS | out 11.028891 USD vs cost 5 USD | [5fL8FgTt…](https://solscan.io/tx/5fL8FgTtFsK9LCPJE1Skr51JoWpowbqS8ZzB7XaEZzrVfseZbGb83bifzXHpam8afbxCA77kFWNUES51XqxPjzfR?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 received Cheers after resolution | PASS | cheers_received 1 USD | — |
+| P2 settled by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [5FCJNGrT…](https://solscan.io/tx/5FCJNGrTtD6TzBQ3c63oAZhfqsATDGUi1xhDgvFAmERcHNYDPWeKoSRVbYrpYJ9uKv2HhgdScJ2ZgiTZWAqUB5Bz?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| request_cheers sent by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [2psQ2rpP…](https://solscan.io/tx/2psQ2rpPcPA9enyh397e4bBBb71kFnR8QdJB5BQDTCDC2PkRKzipesLXFPRtCzaHr4pNHuGYkunreRdgBzieQNZL?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| VRF callback paid recent traders | PASS | recipients 10 (incl. P1), 1 USD each, randomness 512b107f8c0b3381… | [44rT1Gn7…](https://solscan.io/tx/44rT1Gn7d8kCp8AyF5nfKyQs8PGX89gK9YNXHwyoVi8bfyD3Ks68nSmSzXKx4QDA5U2nY4cu1Pj45gwUecairZx2?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| indexer stored the CheersPaid row | PASS | /api/cheers has 44rT1Gn7d8… | — |

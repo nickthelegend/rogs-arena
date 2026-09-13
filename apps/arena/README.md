@@ -4,7 +4,8 @@ The Bun service behind Rogs Arena. It runs on Railway as a single process that h
 
 - **HTTP API and WebSocket** (`/ws`) on one port. The contract lives in [`docs/ARENA-API.md`](../../docs/ARENA-API.md).
 - **Indexer.** Reads `rogs_arena` program logs from the MagicBlock ER (`onLogs`, plus a backfill of the last 1,000 signatures) and the Arena account subscription. It writes to MongoDB and pushes over the WebSocket.
-- **Keeper (watchdog).** Steps in only when the MagicBlock crank is late. It rolls rounds, settles players after a round resolves, requests and resets VRF Cheers, and commits the arena to Solana every 12 rounds (at most 9 commits). Every action goes to `keeper_log`.
+- **Markets.** Nine coin markets (BTC, ETH, SOL, BNB, XRP, DOGE, SUI, AVAX, LINK) from `@rogs/arena-sdk` `MARKETS`, one Arena PDA each. The indexer and keeper tend every market whose arena exists on the ER and recheck the others on each read.
+- **Keeper (watchdog).** Steps in only when the MagicBlock crank is late, per market. It rolls rounds, settles players after a round resolves, requests and resets VRF Cheers, and commits the arena to Solana every 12 rounds (at most 9 commits). Every action goes to `keeper_log`.
 - **Faucet.** Sends 0.02 devnet SOL to a signed-in wallet whose balance is below 0.01 SOL. Limits: 1 request per wallet and 5 per IP every 24 hours.
 
 ## Run

@@ -3,6 +3,7 @@
  * D buys YES $5 with Double; W pushes YES up $60; D sells into it (profit).
  * P buys YES $5 with Protect; W pushes NO $90 (YES falls); P sells into it (loss).
  * After the crank rolls the round, settle both and check bonus == min(|profit|, 10).
+ * The live keeper may settle first; either settlement counts, measured from the pre-roll balance.
  */
 import { appendFileSync } from 'node:fs'
 import { Keypair, LAMPORTS_PER_SOL, SystemProgram } from '@solana/web3.js'
@@ -23,13 +24,13 @@ import {
   fetchArena,
   fetchPlayer,
   keypairSigner,
-  parseArenaEvents,
   positionForRound,
   sendBaseTransaction,
   sendErTransaction,
   waitFor,
 } from '../src/index'
 import { loadKeypair } from './lib/keys'
+import { settleObserved } from './lib/settlement'
 
 const c = createConnections(DEVNET_ENDPOINTS)
 const ix = new ArenaInstructions(c.base)
@@ -77,20 +78,22 @@ await act('p', p, (signer, token) => ix.sell(signer, p.publicKey, OUTCOME_YES, p
 const dPos = positionForRound(await fetchPlayer(c.er, d.publicKey), roundId)!
 const pPos = positionForRound(await fetchPlayer(c.er, p.publicKey), roundId)!
 console.log(`positions sold out: D proceeds ${Number(dPos.proceeds) / 1e6} (cost 5), P proceeds ${Number(pPos.proceeds) / 1e6} (cost 5)`)
+const preRoll = new Map([
+  [d, (await fetchPlayer(c.er, d.publicKey))!.balance],
+  [p, (await fetchPlayer(c.er, p.publicKey))!.balance],
+])
 
 const endTs = arena.current.endTs
 await waitFor(async () => ((await fetchArena(c.er)).current.id > roundId ? true : null), { timeoutMs: (endTs - now() + 90) * 1000, intervalMs: 2_000, label: 'round roll' })
 
 for (const [label, key, pos, ability] of [['Double Profit', d, dPos, ABILITY_DOUBLE], ['Protect Loss', p, pPos, ABILITY_PROTECT]] as const) {
-  const before = (await fetchPlayer(c.er, key.publicKey))!.balance
-  const sent = await sendErTransaction(c.er, [await ix.settlePlayer(key.publicKey)], w)
-  const tx = await c.er.getTransaction(sent.signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 })
-  const event = parseArenaEvents(tx?.meta?.logMessages ?? []).find((e) => e.name === 'PositionSettled')
-  const after = (await fetchPlayer(c.er, key.publicKey))!.balance
+  const before = preRoll.get(key)!
+  const settled = await settleObserved(c, ix, key.publicKey, roundId, w)
+  const after = settled.balance
   const profit = pos.proceeds - pos.cost
   const expectedBonus = ability === ABILITY_DOUBLE ? (profit > 0n ? (profit < ABILITY_CAP ? profit : ABILITY_CAP) : 0n) : (profit < 0n ? (-profit < ABILITY_CAP ? -profit : ABILITY_CAP) : 0n)
-  const ok = event?.name === 'PositionSettled' && event.data.profit === profit && event.data.bonus === expectedBonus && after - before === expectedBonus && expectedBonus > 0n
-  record('CH-19', `${label} bonus`, ok, `profit ${Number(profit) / 1e6} USD, bonus ${event?.name === 'PositionSettled' ? Number(event.data.bonus) / 1e6 : '?'} (expected ${Number(expectedBonus) / 1e6}), balance delta ${Number(after - before) / 1e6}, tx ${sent.signature}`)
+  const ok = settled.event.profit === profit && settled.event.bonus === expectedBonus && after - before === expectedBonus && expectedBonus > 0n
+  record('CH-19', `${label} bonus`, ok, `profit ${Number(profit) / 1e6} USD, bonus ${Number(settled.event.bonus) / 1e6} (expected ${Number(expectedBonus) / 1e6}), balance delta ${Number(after - before) / 1e6}, settled by ${settled.settledBy}, tx ${settled.signature}`)
 }
 
 appendFileSync(new URL('../../../docs/TEST-RUN-CHAIN.md', import.meta.url), ['', '## Ability bonuses (deterministic)', '', `Run at ${new Date().toISOString()}, round ${roundId}.`, '', '| Plan ID | Check | Result | Observed |', '|---|---|---|---|', ...rows, ''].join('\n'))

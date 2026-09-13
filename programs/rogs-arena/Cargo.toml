@@ -27,6 +27,8 @@ bytemuck = { version = "1.14", features = ["derive", "min_const_generics"] }
 # Crank scheduling is serialized directly (same crate the SDK uses) to keep CPI lifetimes simple.
 magicblock-magic-program-api = { version = "0.10.1", default-features = false, features = ["backward-compat"] }
 bincode = "1.3"
+# Anchor 0.32's `solana_program` facade has no `hash`; this hasher is already in the dependency tree.
+solana-sha256-hasher = "3.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

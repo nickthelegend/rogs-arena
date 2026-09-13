@@ -3,6 +3,7 @@
 export type Outcome = 'YES' | 'NO'
 
 export type RoundDto = {
+  market: string
   roundId: number
   startTs: number
   endTs: number
@@ -21,6 +22,7 @@ export type RoundDto = {
 export type TradeDto = {
   id: string
   sig: string
+  market: string
   roundId: number
   owner: string
   side: 'BUY' | 'SELL'
@@ -35,10 +37,11 @@ export type TradeDto = {
   t: number
 }
 
-export type PointDto = { roundId: number; t: number; yes: number; no: number; source: 'chain' }
+export type PointDto = { market: string; roundId: number; t: number; yes: number; no: number; source: 'chain' }
 
 export type CloseDto = {
   id: string
+  market: string
   roundId: number
   trader: string
   outcome: Outcome
@@ -51,6 +54,7 @@ export type CloseDto = {
 export type SettlementDto = {
   id: string
   sig: string
+  market: string
   roundId: number
   owner: string
   outcome: Outcome
@@ -77,6 +81,8 @@ export type ChatDto = { id: string; address: string; name: string; message: stri
 
 export type CheersDto = {
   sig: string
+  /** Market whose arena paid the cheers, read from the callback transaction; null if that transaction was unreadable. */
+  market: string | null
   owner: string
   recipients: string[]
   amountEach: number
@@ -87,6 +93,7 @@ export type CheersDto = {
 export type ProfileDto = { wallet: string; displayName: string | null; createdAt: number; updatedAt: number }
 
 export type ArenaSnapshot = {
+  market: string
   round: RoundDto | null
   recentRounds: RoundDto[]
   trades: TradeDto[]
@@ -98,6 +105,27 @@ export type ArenaSnapshot = {
   chat: ChatDto[]
   cheers: CheersDto[]
   serverTime: number
+}
+
+export type MarketDto = {
+  market: string
+  id: number
+  name: string
+  color: string
+  priceDecimals: number
+  arena: string
+  oracleFeed: string
+  available: boolean
+  round: RoundDto | null
+}
+
+export type HealthMarketDto = {
+  market: string
+  available: boolean
+  roundId: number | null
+  /** 'idle' | 'open' | 'resolved' */
+  status: string | null
+  endTs: number | null
 }
 
 export type ServiceStatus = {

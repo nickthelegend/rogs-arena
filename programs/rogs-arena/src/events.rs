@@ -118,3 +118,14 @@ pub struct TreasuryFunded {
     pub treasury: u64,
     pub ts: i64,
 }
+
+#[event]
+pub struct BadgesRecorded {
+    pub owner: Pubkey,
+    pub badges: u32,
+    pub best_streak: u16,
+    pub calm_wins: u32,
+    pub trades_total: u32,
+    pub updates: u32,
+    pub ts: i64,
+}

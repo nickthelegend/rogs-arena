@@ -4,11 +4,14 @@ import { Connection, Keypair, PublicKey, type Signer, type Transaction } from '@
 import type { RogsArena } from '../idl/rogs_arena'
 import { VRF_EPHEMERAL_QUEUE as VRF_QUEUE_ADDRESS } from './constants'
 import type { Env } from './env'
+import { buildMarkets, type Market } from './markets'
 import { chunk, errorMessage, sleep } from './util'
 
 export type ArenaAccount = IdlAccounts<RogsArena>['arena']
 export type PlayerAccount = IdlAccounts<RogsArena>['player']
 export type ParsedEvent = { name: string; data: unknown; index: number }
+/** One market's arena as read from the ER; `account` is null until that arena is bootstrapped and delegated. */
+export type MarketArena = { market: Market; account: ArenaAccount | null }
 
 export const VRF_EPHEMERAL_QUEUE = new PublicKey(VRF_QUEUE_ADDRESS)
 
@@ -33,9 +36,6 @@ export class ChainTxError extends Error {
 }
 
 export const signatureOf = (error: unknown): string | null => (error instanceof ChainTxError ? error.signature : null)
-
-export const arenaPda = (programId: PublicKey): PublicKey =>
-  PublicKey.findProgramAddressSync([Buffer.from('arena')], programId)[0]
 
 export const playerPda = (owner: PublicKey, programId: PublicKey): PublicKey =>
   PublicKey.findProgramAddressSync([Buffer.from('player'), owner.toBuffer()], programId)[0]
@@ -63,8 +63,8 @@ export function anchorErrorLine(logs: string[]): string | null {
 
 export class ArenaChain {
   readonly programId: PublicKey
-  readonly arena: PublicKey
-  readonly oracleFeed: PublicKey
+  /** Every coin market in MARKETS order (index = market id). */
+  readonly markets: readonly Market[]
   readonly erValidator: PublicKey
   readonly base: Connection
   readonly er: Connection
@@ -73,6 +73,11 @@ export class ArenaChain {
   readonly idl: RogsArena
   readonly program: Program<RogsArena>
   private readonly coder: BorshCoder
+  private readonly marketsByArena: Map<string, Market>
+  private readonly available = new Map<string, boolean>()
+  private readonly mismatchLogged = new Set<string>()
+  private arenaCache: { at: number; arenas: MarketArena[] } | null = null
+  private arenaRead: Promise<MarketArena[]> | null = null
 
   constructor(env: Env) {
     this.idl = JSON.parse(readFileSync(env.IDL_PATH, 'utf8')) as RogsArena
@@ -80,8 +85,8 @@ export class ArenaChain {
       throw new Error(`IDL address ${this.idl.address} does not match PROGRAM_ID ${env.PROGRAM_ID}`)
     }
     this.programId = new PublicKey(env.PROGRAM_ID)
-    this.arena = arenaPda(this.programId)
-    this.oracleFeed = new PublicKey(env.ORACLE_BTC_FEED)
+    this.markets = buildMarkets(this.programId, new PublicKey(env.ORACLE_BTC_FEED))
+    this.marketsByArena = new Map(this.markets.map(market => [market.arena.toBase58(), market]))
     this.erValidator = new PublicKey(env.ER_VALIDATOR)
     this.keeper = Keypair.fromSecretKey(env.KEEPER_SECRET_KEY)
     this.faucet = Keypair.fromSecretKey(env.FAUCET_SECRET_KEY)
@@ -99,8 +104,79 @@ export class ArenaChain {
     return playerPda(owner, this.programId)
   }
 
-  fetchArena(): Promise<ArenaAccount | null> {
-    return this.program.account.arena.fetchNullable(this.arena)
+  market(symbol: string): Market {
+    const market = this.markets.find(candidate => candidate.symbol === symbol)
+    if (!market) throw new Error(`Unknown market ${symbol}`)
+    return market
+  }
+
+  /** The market whose arena PDA appears first among a transaction's account keys. */
+  marketOfAccounts(keys: readonly string[]): Market | null {
+    for (const key of keys) {
+      const market = this.marketsByArena.get(key)
+      if (market) return market
+    }
+    return null
+  }
+
+  fetchArena(market: Market): Promise<ArenaAccount | null> {
+    return this.program.account.arena.fetchNullable(market.arena)
+  }
+
+  /** Reads all market arenas from the ER in one getMultipleAccounts call. */
+  async fetchArenas(): Promise<MarketArena[]> {
+    const accounts = await this.program.account.arena.fetchMultiple(this.markets.map(market => market.arena))
+    const arenas = this.markets.map((market, index): MarketArena => {
+      const account = accounts[index] ?? null
+      if (account && account.market !== market.id) {
+        if (!this.mismatchLogged.has(market.symbol)) {
+          this.mismatchLogged.add(market.symbol)
+          console.warn(`[markets] ${market.symbol} arena ${market.arena.toBase58()} stores market ${account.market}; ignoring it`)
+        }
+        return { market, account: null }
+      }
+      return { market, account }
+    })
+    this.noteAvailability(arenas)
+    this.arenaCache = { at: Date.now(), arenas }
+    return arenas
+  }
+
+  /**
+   * Arena reads for request handlers: reuses a read younger than `maxAgeMs` and shares one in-flight read.
+   * If the ER is unreachable it returns the last successful read, and throws only when there never was one.
+   */
+  async readArenas(maxAgeMs: number): Promise<MarketArena[]> {
+    if (this.arenaCache && Date.now() - this.arenaCache.at <= maxAgeMs) return this.arenaCache.arenas
+    this.arenaRead ??= this.fetchArenas().finally(() => {
+      this.arenaRead = null
+    })
+    try {
+      return await this.arenaRead
+    } catch (error) {
+      if (this.arenaCache) return this.arenaCache.arenas
+      throw error
+    }
+  }
+
+  /** Logs which markets are live once, then only transitions, so unbootstrapped arenas do not flood the log. */
+  private noteAvailability(arenas: MarketArena[]): void {
+    const first = this.available.size === 0
+    const changed = arenas.filter(({ market, account }) => this.available.get(market.symbol) !== (account !== null))
+    for (const { market, account } of changed) this.available.set(market.symbol, account !== null)
+    if (first) {
+      const live = arenas.filter(arena => arena.account).map(arena => arena.market.symbol)
+      const missing = arenas.filter(arena => !arena.account).map(arena => arena.market.symbol)
+      console.log(
+        `[markets] live on the ER: ${live.join(', ') || 'none'}; unavailable until bootstrapped (rechecked on every read): ${missing.join(', ') || 'none'}`,
+      )
+      return
+    }
+    for (const { market, account } of changed) {
+      const arena = market.arena.toBase58()
+      if (account) console.log(`[markets] ${market.symbol} arena ${arena} is now live on the ER`)
+      else console.warn(`[markets] ${market.symbol} arena ${arena} is no longer readable on the ER; market unavailable`)
+    }
   }
 
   fetchPlayer(owner: PublicKey): Promise<PlayerAccount | null> {
@@ -211,6 +287,26 @@ export class ArenaChain {
       await sleep(CONFIRM_POLL_MS)
     }
     throw new ChainTxError(`Transaction not confirmed within ${timeoutMs / 1000}s`, signature, [], true)
+  }
+
+  /** Static account keys of an ER transaction (the ER does not use lookup tables); empty if it cannot be read. */
+  async transactionAccounts(signature: string): Promise<string[]> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const tx = await this.er.getTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' })
+        if (tx) return tx.transaction.message.staticAccountKeys.map(key => key.toBase58())
+      } catch {
+        // retry below
+      }
+      await sleep(500)
+    }
+    return []
+  }
+
+  /** Arena events emitted by an ER transaction, or null when its logs cannot be read. */
+  async erTransactionEvents(signature: string): Promise<ParsedEvent[] | null> {
+    const logs = await this.transactionLogs(this.er, signature)
+    return logs.length ? this.parseEvents(logs) : null
   }
 
   private async transactionLogs(connection: Connection, signature: string): Promise<string[]> {

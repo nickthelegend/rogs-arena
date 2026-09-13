@@ -4,6 +4,8 @@ resolver = "2"
 
 [profile.release]
 overflow-checks = true
+# Size-optimized: a devnet upgrade must fund a buffer as large as the whole program (~5 µSOL/byte).
+opt-level = "s"
 lto = "fat"
 codegen-units = 1
 

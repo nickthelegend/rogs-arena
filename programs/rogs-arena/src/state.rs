@@ -64,7 +64,9 @@ pub struct Arena {
     pub recent_head: u64,
     pub commits: u64,
     pub bump: u8,
-    pub _pad: [u8; 7],
+    /// Coin market id (0 = BTC). Round ids carry it in their high bits.
+    pub market: u8,
+    pub _pad: [u8; 6],
     pub current: RoundState,
     pub history: [RoundSummary; HISTORY_LEN],
     pub recent: [Pubkey; RECENT_TRADERS],
@@ -99,6 +101,17 @@ impl Arena {
         let index = (self.recent_head as usize) % RECENT_TRADERS;
         self.recent[index] = owner;
         self.recent_head = ((index + 1) % RECENT_TRADERS) as u64;
+    }
+
+    /// Distinct recent traders other than `winner`: exactly the players a Cheers draw must include.
+    pub fn cheers_candidate_count(&self, winner: &Pubkey) -> usize {
+        let mut counted: Vec<&Pubkey> = Vec::with_capacity(RECENT_TRADERS);
+        for owner in self.recent.iter() {
+            if *owner != Pubkey::default() && owner != winner && !counted.contains(&owner) {
+                counted.push(owner);
+            }
+        }
+        counted.len()
     }
 
     pub fn is_recent(&self, owner: &Pubkey) -> bool {
@@ -174,5 +187,34 @@ impl Player {
             ..Position::default()
         };
         Some(index)
+    }
+}
+
+/// Base-layer achievements, written only by the post-commit Magic Action of `commit_player_badges`.
+#[account]
+#[derive(InitSpace, Default, Debug)]
+pub struct BadgeRecord {
+    pub owner: Pubkey,
+    pub bump: u8,
+    pub badges: u32,
+    pub best_streak: u16,
+    pub calm_wins: u32,
+    pub trades_total: u32,
+    pub wins_total: u32,
+    pub updates: u32,
+    pub updated_ts: i64,
+}
+
+impl BadgeRecord {
+    /// Monotonic merge: badge bits only accumulate and counters only rise, so a stale or
+    /// retried action can never take an achievement away.
+    pub fn merge(&mut self, player: &Player, now: i64) {
+        self.badges |= player.badges;
+        self.best_streak = self.best_streak.max(player.best_streak);
+        self.calm_wins = self.calm_wins.max(player.calm_wins);
+        self.trades_total = self.trades_total.max(player.trades_total);
+        self.wins_total = self.wins_total.max(player.wins_total);
+        self.updates = self.updates.saturating_add(1);
+        self.updated_ts = now;
     }
 }

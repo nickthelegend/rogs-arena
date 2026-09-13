@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { BN, BorshCoder, type Idl } from '@coral-xyz/anchor'
+import { MARKET_ROUND_BASE } from '@rogs/arena-sdk'
 import { PublicKey } from '@solana/web3.js'
 import { ArenaChain, priceToNumber } from '../chain'
 import { env } from '../env'
@@ -98,6 +99,7 @@ const cheersEvent = {
 const expectedBuy: TradeDto = {
   id: `${SIG}:0`,
   sig: SIG,
+  market: 'BTC',
   roundId: 42,
   owner: owner.toBase58(),
   side: 'BUY',
@@ -116,7 +118,7 @@ describe('event → DTO mappers', () => {
   test('TradeExecuted BUY → trade + point, no close', () => {
     const { trade, point, close } = mapTrade(SIG, 0, buyEvent)
     expect(trade).toEqual(expectedBuy)
-    expect(point).toEqual({ roundId: 42, t: 1_757_750_400_000, yes: 0.5432, no: 0.4568, source: 'chain' })
+    expect(point).toEqual({ market: 'BTC', roundId: 42, t: 1_757_750_400_000, yes: 0.5432, no: 0.4568, source: 'chain' })
     expect(close).toBeNull()
   })
 
@@ -125,6 +127,7 @@ describe('event → DTO mappers', () => {
     expect(trade).toEqual({
       id: `${SIG}:2`,
       sig: SIG,
+      market: 'BTC',
       roundId: 42,
       owner: owner.toBase58(),
       side: 'SELL',
@@ -138,9 +141,10 @@ describe('event → DTO mappers', () => {
       ability: 0,
       t: 1_757_750_400_000,
     })
-    expect(point).toEqual({ roundId: 42, t: 1_757_750_400_000, yes: 0.625, no: 0.375, source: 'chain' })
+    expect(point).toEqual({ market: 'BTC', roundId: 42, t: 1_757_750_400_000, yes: 0.625, no: 0.375, source: 'chain' })
     expect(close).toEqual({
       id: `${SIG}:2`,
+      market: 'BTC',
       roundId: 42,
       trader: owner.toBase58(),
       outcome: 'NO',
@@ -159,6 +163,7 @@ describe('event → DTO mappers', () => {
 
   test('RoundOpened and RoundResolved', () => {
     expect(mapRoundOpened(SIG, openedEvent)).toEqual({
+      market: 'BTC',
       roundId: 7,
       startTs: 1_757_750_100,
       endTs: 1_757_750_400,
@@ -168,6 +173,7 @@ describe('event → DTO mappers', () => {
       openedSig: SIG,
     })
     expect(mapRoundResolved(SIG, resolvedEvent)).toEqual({
+      market: 'BTC',
       roundId: 7,
       strikePrice: '7725512345678',
       closePrice: '7730000000000',
@@ -186,6 +192,7 @@ describe('event → DTO mappers', () => {
     expect(mapSettlement(SIG, 1, settledEvent)).toEqual({
       id: `${SIG}:1`,
       sig: SIG,
+      market: 'BTC',
       roundId: 41,
       owner: owner.toBase58(),
       outcome: 'YES',
@@ -197,8 +204,9 @@ describe('event → DTO mappers', () => {
       cheers: true,
       t: 1_757_750_400_000,
     })
-    expect(mapCheers(SIG, cheersEvent)).toEqual({
+    expect(mapCheers(SIG, cheersEvent, 'BTC')).toEqual({
       sig: SIG,
+      market: 'BTC',
       owner: owner.toBase58(),
       recipients: [friend.toBase58(), '11111111111111111111111111111111'],
       amountEach: 1,
@@ -225,6 +233,7 @@ describe('event → DTO mappers', () => {
       outcome: 0,
     }
     expect(roundFromState(state)).toEqual({
+      market: 'BTC',
       roundId: 8,
       startTs: 1_757_750_400,
       endTs: 1_757_750_700,
@@ -251,12 +260,28 @@ describe('event → DTO mappers', () => {
     // Floors like the program: 1 / 3 → 3333 bps.
     expect(yesPriceBps(new BN(2), new BN(1))).toBe(3_333)
     expect(pointFromPools(8, state.yesPool, state.noPool, 1_757_750_405_123)).toEqual({
+      market: 'BTC',
       roundId: 8,
       t: 1_757_750_405_123,
       yes: 0.25,
       no: 0.75,
       source: 'chain',
     })
+  })
+
+  test('namespaced round ids map every DTO to its market; ids outside the table throw', () => {
+    const sol = 2 * MARKET_ROUND_BASE + 42
+    const link = 8 * MARKET_ROUND_BASE + 1
+    const { trade, point, close } = mapTrade(SIG, 0, { ...sellLossEvent, round_id: new BN(sol) })
+    expect([trade.market, point.market, close?.market]).toEqual(['SOL', 'SOL', 'SOL'])
+    expect(trade.roundId).toBe(sol)
+    expect(mapRoundOpened(SIG, { ...openedEvent, round_id: new BN(link) })).toMatchObject({ market: 'LINK', roundId: link })
+    expect(mapRoundResolved(SIG, { ...resolvedEvent, round_id: new BN(MARKET_ROUND_BASE + 7) }).market).toBe('ETH')
+    expect(mapSettlement(SIG, 0, { ...settledEvent, round_id: new BN(5 * MARKET_ROUND_BASE + 3) }).market).toBe('DOGE')
+    expect(mapCheers(SIG, cheersEvent, null).market).toBeNull()
+    expect(() => mapTrade(SIG, 0, { ...buyEvent, round_id: new BN(9 * MARKET_ROUND_BASE + 1) })).toThrow(
+      `Round id ${9 * MARKET_ROUND_BASE + 1} belongs to no known market`,
+    )
   })
 
   test('oracle price helper', () => {
@@ -298,7 +323,7 @@ describe('EventParser over encoded program logs (real IDL)', () => {
     const [settled, trade, cheers] = events
     expect(mapSettlement(SIG, settled!.index, settled!.data as typeof settledEvent).payout).toBe(12)
     expect(mapTrade(SIG, trade!.index, trade!.data as typeof buyEvent).trade).toEqual({ ...expectedBuy, id: `${SIG}:1` })
-    expect(mapCheers(SIG, cheers!.data as typeof cheersEvent).randomness).toBe(
+    expect(mapCheers(SIG, cheers!.data as typeof cheersEvent, null).randomness).toBe(
       '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
     )
   })
@@ -324,7 +349,7 @@ describe('EventParser over encoded program logs (real IDL)', () => {
     ]
     const events = chain.parseEvents(callbackLogs)
     expect(events.map(event => [event.name, event.index])).toEqual([['CheersPaid', 0]])
-    const cheers = mapCheers('3acK2K49', events[0]!.data as typeof cheersEvent)
+    const cheers = mapCheers('3acK2K49', events[0]!.data as typeof cheersEvent, 'BTC')
     expect(cheers).toMatchObject({
       sig: '3acK2K49',
       owner: '42j1sjE7LUGWdgD25zVgypDx5jhkzbDCZzWMVzV8RqL4',

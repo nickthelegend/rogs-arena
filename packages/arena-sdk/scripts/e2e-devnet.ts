@@ -47,6 +47,7 @@ import {
   type SessionKey,
 } from '../src/index'
 import { loadKeypair } from './lib/keys'
+import { settleObserved } from './lib/settlement'
 
 type Step = { step: string; ok: boolean; skipped?: boolean; detail: string; signature?: string; layer?: 'base' | 'er'; ms?: number }
 const steps: Step[] = []
@@ -173,9 +174,12 @@ async function main() {
     if (!ok) throw error
   }
 
-  // 7. Trade lock: wait for the crank to roll the round with no keeper running.
+  // 7. Trade lock: wait for the crank to roll the round.
   const snapshotP1 = positionForRound(await fetchPlayer(connections.er, players[0].publicKey), roundId)!
   const snapshotP2 = positionForRound(await fetchPlayer(connections.er, players[1].publicKey), roundId)!
+  const preRollBalances = await Promise.all(
+    [players[0], players[1]].map(async (player) => (await fetchPlayer(connections.er, player.publicKey))!.balance),
+  )
   const endTs = arena.current.endTs
   console.log(`waiting for the MagicBlock crank to resolve round ${roundId} at ${new Date(endTs * 1000).toISOString()} (lock ${TRADE_LOCK_SECONDS}s before)`)
   const rolled = await waitFor(
@@ -189,15 +193,19 @@ async function main() {
   const lag = rolled.lastRollTs - endTs
   record({ step: 'crank rolled the round inside the ER', ok: Boolean(resolved) && lag <= 30, detail: `outcome ${resolved.outcome === OUTCOME_YES ? 'YES' : 'NO'} strike ${resolved.strikePrice} close ${resolved.closePrice}, rolled ${lag}s after end` })
 
-  // 8. Settle both players (permissionless) and check exact payouts and bonuses.
+  // 8. Settle both players (permissionless) and check exact payouts and bonuses. The live keeper
+  //    may settle first; settle_player is idempotent, so the delta is measured from before the roll.
   for (const [index, snapshot] of [snapshotP1, snapshotP2].entries()) {
-    const before = (await fetchPlayer(connections.er, players[index].publicKey))!
     const expected = settleSlot(snapshot, resolved.outcome)
-    const sent = await sendErTransaction(connections.er, [await instructions.settlePlayer(players[index].publicKey)], sessions[index].keypair)
+    const settled = await settleObserved(connections, instructions, players[index].publicKey, roundId, sessions[index].keypair)
     const after = (await fetchPlayer(connections.er, players[index].publicKey))!
-    const delta = after.balance - before.balance
-    const ok = delta === expected.payout + expected.bonus && !positionForRound(after, roundId)
-    record({ step: `P${index + 1} settle_player`, ok, detail: `payout ${usd(expected.payout)} profit ${usd(expected.profit)} bonus ${usd(expected.bonus)} calm ${expected.calm} cheers ${expected.cheers}; balance delta ${usd(delta)}; wins ${after.winsTotal} losses ${after.lossesTotal} calmWins ${after.calmWins}`, signature: sent.signature, ms: sent.ms })
+    const delta = after.balance - preRollBalances[index]
+    const ok =
+      delta === expected.payout + expected.bonus &&
+      settled.event.payout === expected.payout &&
+      settled.event.bonus === expected.bonus &&
+      !positionForRound(after, roundId)
+    record({ step: `P${index + 1} settle_player`, ok, detail: `payout ${usd(expected.payout)} profit ${usd(expected.profit)} bonus ${usd(expected.bonus)} calm ${expected.calm} cheers ${expected.cheers}; balance delta ${usd(delta)}; settled by ${settled.settledBy}; wins ${after.winsTotal} losses ${after.lossesTotal} calmWins ${after.calmWins}`, signature: settled.signature })
     if (!ok) throw new Error(`P${index + 1} settlement mismatch`)
     if (index === 1 && expected.cheers !== (after.cheersPending > 0)) throw new Error('cheers pending flag mismatch')
   }

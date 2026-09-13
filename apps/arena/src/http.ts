@@ -1,15 +1,15 @@
 import type { Server } from 'bun'
 import { createNonce, requireWallet, verifyLogin } from './auth'
-import type { ArenaChain } from './chain'
+import type { ArenaChain, MarketArena } from './chain'
 import { listChat } from './chat'
-import { roundStatusLabel } from './constants'
 import type { Database } from './db'
 import type { Env } from './env'
 import { HttpError } from './errors'
 import { requestFaucet } from './faucet'
-import { toNumber } from './mappers'
+import { DEFAULT_MARKET } from './markets'
 import type { RealtimeHub, SocketData } from './realtime'
 import {
+  arenaQuerySchema,
   chatQuerySchema,
   cheersQuerySchema,
   nonceBodySchema,
@@ -21,9 +21,10 @@ import {
   verifyBodySchema,
   walletSchema,
 } from './schemas'
-import { buildSnapshot } from './snapshot'
+import { buildSnapshot, toHealthMarkets, toMarketDtos } from './snapshot'
 import {
   getUser,
+  latestRound,
   listCheers,
   listCloses,
   listPoints,
@@ -48,8 +49,11 @@ type ArenaServer = Server<SocketData>
 type Routed = { status?: number; data: unknown }
 
 const LOCAL_ORIGIN = 'http://localhost:3000'
+/** Arena reads for /health and /api/markets are shared for this long, so polling clients cost one ER call. */
+const ARENA_READ_MAX_AGE_MS = 2_000
 const KNOWN_PATHS = new Set([
   '/health',
+  '/api/markets',
   '/api/arena',
   '/api/rounds',
   '/api/trades',
@@ -100,7 +104,7 @@ export function createFetchHandler(ctx: HttpContext) {
 
     if (url.pathname === '/ws') {
       const upgraded = server.upgrade(req, {
-        data: { connId: crypto.randomUUID(), sessionId: null, wallet: null },
+        data: { connId: crypto.randomUUID(), sessionId: null, wallet: null, market: DEFAULT_MARKET },
       })
       return upgraded ? undefined : json({ error: 'Expected a WebSocket upgrade' }, 426, cors)
     }
@@ -126,16 +130,31 @@ async function route(ctx: HttpContext, req: Request, url: URL, server: ArenaServ
     switch (pathname) {
       case '/health':
         return health(ctx)
+      case '/api/markets': {
+        const [arenas, rounds] = await Promise.all([
+          readArenas(ctx),
+          Promise.all(ctx.chain.markets.map(market => latestRound(cols, market.symbol))),
+        ])
+        return { data: toMarketDtos(ctx.chain.markets, arenas, rounds) }
+      }
       case '/api/arena':
-        return { data: await buildSnapshot(cols, ctx.hub.presence) }
-      case '/api/rounds':
-        return { data: await listRounds(cols, parseInput(roundsQuerySchema, query).limit) }
-      case '/api/trades':
-        return { data: await listTrades(cols, parseInput(roundQuerySchema, query).roundId) }
-      case '/api/points':
-        return { data: await listPoints(cols, parseInput(roundQuerySchema, query).roundId) }
-      case '/api/closes':
-        return { data: await listCloses(cols, parseInput(roundQuerySchema, query).roundId) }
+        return { data: await buildSnapshot(cols, ctx.hub.presence, parseInput(arenaQuerySchema, query).market) }
+      case '/api/rounds': {
+        const { market, limit } = parseInput(roundsQuerySchema, query)
+        return { data: await listRounds(cols, market, limit) }
+      }
+      case '/api/trades': {
+        const { market, roundId } = parseInput(roundQuerySchema, query)
+        return { data: await listTrades(cols, market, roundId) }
+      }
+      case '/api/points': {
+        const { market, roundId } = parseInput(roundQuerySchema, query)
+        return { data: await listPoints(cols, market, roundId) }
+      }
+      case '/api/closes': {
+        const { market, roundId } = parseInput(roundQuerySchema, query)
+        return { data: await listCloses(cols, market, roundId) }
+      }
       case '/api/settlements':
         return { data: await listSettlements(cols, parseInput(settlementsQuerySchema, query)) }
       case '/api/chat':
@@ -187,8 +206,15 @@ async function route(ctx: HttpContext, req: Request, url: URL, server: ArenaServ
   throw new HttpError(404, 'Not found')
 }
 
+/** All market arenas from the ER (shared briefly across requests); null when the ER has never been readable. */
+const readArenas = (ctx: HttpContext): Promise<MarketArena[] | null> =>
+  withTimeout(ctx.chain.readArenas(ARENA_READ_MAX_AGE_MS), 4_000, 'arena read').then(
+    arenas => arenas,
+    () => null,
+  )
+
 async function health(ctx: HttpContext): Promise<Routed> {
-  const [mongo, er, arena] = await Promise.all([
+  const [mongo, er, arenas] = await Promise.all([
     withTimeout(ctx.database.db.command({ ping: 1 }), 3_000, 'mongo ping').then(
       () => true,
       () => false,
@@ -197,18 +223,12 @@ async function health(ctx: HttpContext): Promise<Routed> {
       () => true,
       () => false,
     ),
-    withTimeout(ctx.chain.fetchArena(), 4_000, 'arena fetch').then(
-      account =>
-        account
-          ? {
-              roundId: toNumber(account.current.id),
-              status: roundStatusLabel(account.current.status),
-              endTs: toNumber(account.current.endTs),
-            }
-          : null,
-      () => null,
-    ),
+    readArenas(ctx),
   ])
+  const markets = toHealthMarkets(ctx.chain.markets, arenas)
+  // `arena` is BTC's row in the pre-multi-market shape.
+  const btc = markets.find(market => market.market === DEFAULT_MARKET)
+  const arena = btc?.available ? { roundId: btc.roundId, status: btc.status, endTs: btc.endTs } : null
   return {
     status: mongo ? 200 : 503,
     data: {
@@ -217,6 +237,7 @@ async function health(ctx: HttpContext): Promise<Routed> {
       er,
       programId: ctx.chain.programId.toBase58(),
       arena,
+      markets,
       indexer: { ...ctx.status.indexer },
       keeper: { ...ctx.status.keeper },
     },

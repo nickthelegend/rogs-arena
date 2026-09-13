@@ -46,7 +46,7 @@ pub const HEART_FRESH_SECONDS: i64 = 30;
 
 pub const CHEERS_RECIPIENTS: usize = 10;
 pub const CHEERS_AMOUNT: u64 = USD;
-pub const MAX_CHEERS_CANDIDATES: usize = 12;
+pub const MAX_CHEERS_CANDIDATES: usize = RECENT_TRADERS - 1;
 pub const CHEERS_TIMEOUT_SECONDS: i64 = 120;
 
 pub const RECENT_TRADERS: usize = 16;
@@ -83,3 +83,18 @@ pub const PRICE_UPDATE_DISCRIMINATOR: [u8; 8] = [234, 161, 14, 36, 172, 239, 15,
 /// VRF queue that is delegated to the ephemeral rollups (devnet and mainnet).
 pub const VRF_EPHEMERAL_QUEUE: Pubkey = pubkey!("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc");
 pub const MAGIC_PROGRAM_ID: Pubkey = pubkey!("Magic11111111111111111111111111111111111111");
+
+/// Round ids are `market << MARKET_ROUND_SHIFT | n`, so they never collide across markets.
+pub const MARKET_ROUND_SHIFT: u32 = 40;
+
+pub const fn market_round_base(market: u8) -> u64 {
+    (market as u64) << MARKET_ROUND_SHIFT
+}
+
+pub const BADGE_SEED: &[u8] = b"badges";
+/// `ActionArgs::new` schedules Magic Actions with escrow index 255.
+pub const ACTION_ESCROW_INDEX: u8 = 255;
+/// Seed tag of the delegation program's ephemeral balance escrow PDA.
+pub const ACTION_ESCROW_TAG: &[u8] = b"balance";
+pub const DELEGATION_PROGRAM_ID: Pubkey = pubkey!("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
+pub const BADGE_ACTION_COMPUTE_UNITS: u32 = 100_000;

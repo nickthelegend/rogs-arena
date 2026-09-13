@@ -1,4 +1,6 @@
+import { MARKET_ROUND_BASE } from '@rogs/arena-sdk'
 import { MongoClient, type Collection, type Db, type ObjectId } from 'mongodb'
+import { DEFAULT_MARKET, MARKET_SYMBOLS } from './markets'
 import type { CheersDto, CloseDto, PointDto, RoundDto, SettlementDto, TradeDto } from './types'
 
 export type UserDoc = {
@@ -28,6 +30,7 @@ export type NonceDoc = {
   expiresAt: Date
 }
 export type SessionDoc = { token: string; wallet: string; createdAt: Date; expiresAt: Date }
+/** Keeper state for one market; see keeperMetaId in keeper.ts. */
 export type MetaDoc = {
   _id: string
   commits?: number
@@ -95,6 +98,9 @@ export async function connectDb(uri: string, dbName: string): Promise<Database> 
   const keeperLogCapped = await ensureKeeperLog(db)
   const cols = getCollections(db)
   await ensureIndexes(cols)
+  const migrated = await migrateMarkets(cols)
+  const stamped = Object.entries(migrated).filter(([, count]) => count > 0)
+  if (stamped.length) console.log(`[db] stamped market on legacy documents: ${stamped.map(([name, count]) => `${name} ${count}`).join(', ')}`)
   return { client, db, cols, keeperLogCapped }
 }
 
@@ -112,20 +118,63 @@ async function ensureKeeperLog(db: Db): Promise<boolean> {
   }
 }
 
+/**
+ * Stamps `market` on documents written before multi-market support. Round-scoped documents derive it from their
+ * namespaced roundId (every legacy id is BTC's, and this stays right for any other market's id); cheers carry no
+ * round id and predate the other arenas, so they are BTC. Only touches documents without `market`: idempotent.
+ */
+export async function migrateMarkets(cols: Collections): Promise<Record<string, number>> {
+  const missing = { market: { $exists: false } }
+  const fromRoundId = [
+    {
+      $set: {
+        market: {
+          $arrayElemAt: [MARKET_SYMBOLS, { $toInt: { $floor: { $divide: ['$roundId', MARKET_ROUND_BASE] } } }],
+        },
+      },
+    },
+  ]
+  const [rounds, trades, points, closes, settlements, cheers] = await Promise.all([
+    cols.rounds.updateMany(missing, fromRoundId),
+    cols.trades.updateMany(missing, fromRoundId),
+    cols.points.updateMany(missing, fromRoundId),
+    cols.closes.updateMany(missing, fromRoundId),
+    cols.settlements.updateMany(missing, fromRoundId),
+    cols.cheers.updateMany(missing, { $set: { market: DEFAULT_MARKET } }),
+  ])
+  return {
+    rounds: rounds.modifiedCount,
+    trades: trades.modifiedCount,
+    points: points.modifiedCount,
+    closes: closes.modifiedCount,
+    settlements: settlements.modifiedCount,
+    cheers: cheers.modifiedCount,
+  }
+}
+
 export async function ensureIndexes(cols: Collections): Promise<void> {
   await Promise.all([
     cols.users.createIndex({ wallet: 1 }, { unique: true }),
     cols.trades.createIndex({ id: 1 }, { unique: true }),
     cols.trades.createIndex({ roundId: 1, t: 1 }),
+    cols.trades.createIndex({ market: 1, roundId: 1, t: 1 }),
     cols.rounds.createIndex({ roundId: 1 }, { unique: true }),
+    cols.rounds.createIndex({ market: 1, roundId: -1 }),
     cols.points.createIndex({ roundId: 1, t: 1 }),
+    cols.points.createIndex({ market: 1, roundId: 1, t: 1 }),
     cols.points.createIndex({ key: 1 }, { unique: true }),
     cols.closes.createIndex({ id: 1 }, { unique: true }),
     cols.closes.createIndex({ roundId: 1 }),
+    cols.closes.createIndex({ market: 1, roundId: 1, t: 1 }),
     cols.settlements.createIndex({ id: 1 }, { unique: true }),
     cols.settlements.createIndex({ roundId: 1 }),
     cols.settlements.createIndex({ owner: 1 }),
+    cols.settlements.createIndex({ market: 1, roundId: 1, t: 1 }),
+    cols.settlements.createIndex({ market: 1, owner: 1, t: 1 }),
+    cols.settlements.createIndex({ owner: 1, t: 1 }),
     cols.cheers.createIndex({ sig: 1 }, { unique: true }),
+    cols.cheers.createIndex({ t: -1 }),
+    cols.cheers.createIndex({ owner: 1, market: 1 }),
     cols.chat.createIndex({ t: 1 }),
     cols.chat.createIndex({ address: 1, t: -1 }),
     cols.faucet.createIndex({ wallet: 1, ts: 1 }),

@@ -1,5 +1,8 @@
-//! Rogs Arena: BTC 5-minute UP/DOWN rounds that run inside a MagicBlock
-//! Ephemeral Rollup.
+//! Rogs Arena: 5-minute UP/DOWN rounds on nine coins (BTC, ETH, SOL, BNB, XRP,
+//! DOGE, SUI, AVAX, LINK) that run inside a MagicBlock Ephemeral Rollup.
+//!
+//! - Each coin is its own arena PDA: market 0 (BTC) is `["arena"]`, market n is
+//!   `["arena", [n]]`. Round ids carry the market in their high bits.
 //!
 //! - Arena and Player accounts are delegated to the ER; every trade is a
 //!   gasless ER transaction, usually signed by a Gum session key.
@@ -13,9 +16,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use anchor_lang::solana_program::program::invoke;
-use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
+use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
+use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
+use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 use ephemeral_rollups_sdk::vrf::anchor::{vrf, vrf_callback};
 use ephemeral_rollups_sdk::vrf::instructions::{
     create_request_randomness_ix, RequestRandomnessParams,
@@ -59,35 +63,41 @@ pub mod rogs_arena {
     // ---------------------------------------------------------------------
 
     pub fn initialize_arena(ctx: Context<InitializeArena>, args: InitializeArenaArgs) -> Result<()> {
-        require!(
-            (MIN_ROUND_SECONDS..=MAX_ROUND_SECONDS).contains(&args.round_seconds),
-            ArenaError::InvalidConfig
-        );
-        require!(args.liquidity >= MIN_LIQUIDITY, ArenaError::InvalidConfig);
-        require!(args.fee_bps <= MAX_FEE_BPS, ArenaError::InvalidConfig);
         let mut arena = ctx.accounts.arena.load_init()?;
-        arena.authority = ctx.accounts.authority.key();
-        arena.keeper = args.keeper;
-        arena.oracle_feed = args.oracle_feed;
-        arena.round_seconds = args.round_seconds;
-        arena.liquidity = args.liquidity;
-        arena.fee_bps = args.fee_bps;
-        arena.treasury = args.treasury_seed;
-        arena.bump = ctx.bumps.arena;
-        Ok(())
+        configure_arena(&mut arena, ctx.accounts.authority.key(), &args, ctx.bumps.arena, 0)
     }
 
     pub fn delegate_arena(ctx: Context<DelegateArena>) -> Result<()> {
-        {
-            let data = ctx.accounts.arena.try_borrow_data()?;
-            require!(
-                data.len() >= 40 && data[8..40] == ctx.accounts.authority.key().to_bytes()[..],
-                ArenaError::Unauthorized
-            );
-        }
+        require_stored_authority(&ctx.accounts.arena, &ctx.accounts.authority.key())?;
         ctx.accounts.delegate_arena(
             &ctx.accounts.authority,
             &[ARENA_SEED],
+            DelegateConfig {
+                validator: ctx.remaining_accounts.first().map(|account| account.key()),
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+
+    /// Opens another coin market. Only the authority of the market 0 arena can.
+    pub fn initialize_market(
+        ctx: Context<InitializeMarket>,
+        market: u8,
+        args: InitializeArenaArgs,
+    ) -> Result<()> {
+        require!(market > 0, ArenaError::InvalidConfig);
+        require_stored_authority(&ctx.accounts.root_arena, &ctx.accounts.authority.key())?;
+        let mut arena = ctx.accounts.arena.load_init()?;
+        configure_arena(&mut arena, ctx.accounts.authority.key(), &args, ctx.bumps.arena, market)
+    }
+
+    pub fn delegate_market(ctx: Context<DelegateMarket>, market: u8) -> Result<()> {
+        require_stored_authority(&ctx.accounts.arena, &ctx.accounts.authority.key())?;
+        let market_seed = [market];
+        ctx.accounts.delegate_arena(
+            &ctx.accounts.authority,
+            &[ARENA_SEED, &market_seed],
             DelegateConfig {
                 validator: ctx.remaining_accounts.first().map(|account| account.key()),
                 ..Default::default()
@@ -608,11 +618,13 @@ pub mod rogs_arena {
             ctx.remaining_accounts.len() <= MAX_CHEERS_CANDIDATES,
             ArenaError::TooManyCandidates
         );
-        let now = Clock::get()?.unix_timestamp;
+        let clock = Clock::get()?;
+        let now = clock.unix_timestamp;
         let winner_owner = ctx.accounts.winner.owner;
         require!(ctx.accounts.winner.cheers_pending > 0, ArenaError::NoCheersPending);
         require!(ctx.accounts.winner.cheers_inflight == 0, ArenaError::CheersInflight);
 
+        let seed: [u8; 32];
         let mut metas = vec![
             SerializableAccountMeta {
                 pubkey: ctx.accounts.arena.key(),
@@ -650,6 +662,12 @@ pub mod rogs_arena {
                     is_writable: true,
                 });
             }
+            // Fair Cheers: every recent trader except the winner is in the draw, so the caller can't curate it.
+            require!(
+                seen.len() == arena.cheers_candidate_count(&winner_owner),
+                ArenaError::CheersCandidatesIncomplete
+            );
+            seed = cheers_seed(&caller_seed, &winner_owner, arena.current.id, clock.slot, now);
         }
 
         let winner = &mut ctx.accounts.winner;
@@ -663,7 +681,7 @@ pub mod rogs_arena {
             oracle_queue: ctx.accounts.oracle_queue.key(),
             callback_program_id: crate::ID,
             callback_discriminator: instruction::CheersCallback::DISCRIMINATOR.to_vec(),
-            caller_seed,
+            caller_seed: seed,
             accounts_metas: Some(metas),
             callback_args: None,
         });
@@ -851,6 +869,186 @@ pub mod rogs_arena {
         .build_and_invoke()?;
         Ok(())
     }
+
+    // ---------------------------------------------------------------------
+    // Badges on Solana through a Magic Action
+    // ---------------------------------------------------------------------
+
+    /// Base layer: creates the owner's badge record. The Player can already be delegated.
+    pub fn init_badge_record(ctx: Context<InitBadgeRecord>) -> Result<()> {
+        let record = &mut ctx.accounts.badge_record;
+        record.owner = ctx.accounts.owner.key();
+        record.bump = ctx.bumps.badge_record;
+        Ok(())
+    }
+
+    /// ER: commits the Player to Solana and schedules `record_badges` to run there right after
+    /// the commit lands (a post-commit Magic Action). The Player stays delegated.
+    pub fn commit_player_badges(ctx: Context<CommitPlayerBadges>) -> Result<()> {
+        ctx.accounts.player.exit(&crate::ID)?;
+        let record_badges = CallHandler {
+            destination_program: crate::ID,
+            accounts: vec![
+                ShortAccountMeta {
+                    pubkey: ctx.accounts.badge_record.key(),
+                    is_writable: true,
+                },
+                ShortAccountMeta {
+                    pubkey: ctx.accounts.player.key(),
+                    is_writable: false,
+                },
+            ],
+            args: ActionArgs::new(anchor_lang::InstructionData::data(&instruction::RecordBadges {})),
+            // The validator pays the action's fee and the handler creates no rent, so the
+            // owner's escrow only authenticates the call.
+            escrow_authority: ctx.accounts.owner.to_account_info(),
+            compute_units: BADGE_ACTION_COMPUTE_UNITS,
+        };
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.owner.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit(&[ctx.accounts.player.to_account_info()])
+        .add_post_commit_actions([record_badges])
+        .build_and_invoke()?;
+        Ok(())
+    }
+
+    /// Base layer, callable only as the Magic Action (the escrow signer proves it): merges the
+    /// freshly committed Player's achievements into the owner's badge record.
+    pub fn record_badges(ctx: Context<RecordBadges>) -> Result<()> {
+        let player = {
+            let data = ctx.accounts.player.try_borrow_data()?;
+            Player::try_deserialize(&mut &data[..])?
+        };
+        require_keys_eq!(player.owner, ctx.accounts.badge_record.owner, ArenaError::Unauthorized);
+        let now = Clock::get()?.unix_timestamp;
+        let record = &mut ctx.accounts.badge_record;
+        record.merge(&player, now);
+        emit!(BadgesRecorded {
+            owner: record.owner,
+            badges: record.badges,
+            best_streak: record.best_streak,
+            calm_wins: record.calm_wins,
+            trades_total: record.trades_total,
+            updates: record.updates,
+            ts: now,
+        });
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct InitBadgeRecord<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + BadgeRecord::INIT_SPACE,
+        seeds = [BADGE_SEED, owner.key().as_ref()],
+        bump
+    )]
+    pub badge_record: Account<'info, BadgeRecord>,
+    pub system_program: Program<'info, System>,
+}
+
+#[commit]
+#[derive(Accounts)]
+pub struct CommitPlayerBadges<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [PLAYER_SEED, owner.key().as_ref()],
+        bump = player.bump,
+        constraint = player.owner == owner.key() @ ArenaError::Unauthorized
+    )]
+    pub player: Account<'info, Player>,
+    /// CHECK: the owner's base-layer badge record; only the post-commit action writes it.
+    #[account(seeds = [BADGE_SEED, owner.key().as_ref()], bump)]
+    pub badge_record: UncheckedAccount<'info>,
+}
+
+#[action]
+#[derive(Accounts)]
+pub struct RecordBadges<'info> {
+    #[account(mut, seeds = [BADGE_SEED, badge_record.owner.as_ref()], bump = badge_record.bump)]
+    pub badge_record: Account<'info, BadgeRecord>,
+    /// CHECK: the committed Player PDA of the record's owner (owned by the delegation program while delegated).
+    #[account(seeds = [PLAYER_SEED, badge_record.owner.as_ref()], bump)]
+    pub player: UncheckedAccount<'info>,
+    /// CHECK: the program that scheduled the action. The delegation program's call handler (v2) passes it
+    /// right after the action's own accounts; pinning it to this program rejects actions scheduled elsewhere.
+    #[account(address = crate::ID)]
+    pub source_program: UncheckedAccount<'info>,
+    /// CHECK: the wallet the action was scheduled with; only the record's owner can drive it.
+    #[account(address = badge_record.owner @ ArenaError::Unauthorized)]
+    pub escrow_auth: UncheckedAccount<'info>,
+    /// CHECK: only the delegation program can sign for this PDA, so `signer` proves the call
+    /// came through the post-commit path and not from a wallet.
+    #[account(signer, address = action_escrow(&escrow_auth.key()))]
+    pub escrow: UncheckedAccount<'info>,
+}
+
+/// VRF seed for a Cheers draw. The caller only contributes part of it; state they can't choose is mixed in.
+fn cheers_seed(caller_seed: &[u8; 32], winner: &Pubkey, round_id: u64, slot: u64, now: i64) -> [u8; 32] {
+    solana_sha256_hasher::hashv(&[
+        caller_seed,
+        winner.as_ref(),
+        &round_id.to_le_bytes(),
+        &slot.to_le_bytes(),
+        &now.to_le_bytes(),
+    ])
+    .to_bytes()
+}
+
+/// The delegation program's ephemeral balance escrow for `escrow_auth` at the action escrow index.
+fn action_escrow(escrow_auth: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[ACTION_ESCROW_TAG, escrow_auth.as_ref(), &[ACTION_ESCROW_INDEX]],
+        &DELEGATION_PROGRAM_ID,
+    )
+    .0
+}
+
+fn configure_arena(
+    arena: &mut Arena,
+    authority: Pubkey,
+    args: &InitializeArenaArgs,
+    bump: u8,
+    market: u8,
+) -> Result<()> {
+    require!(
+        (MIN_ROUND_SECONDS..=MAX_ROUND_SECONDS).contains(&args.round_seconds),
+        ArenaError::InvalidConfig
+    );
+    require!(args.liquidity >= MIN_LIQUIDITY, ArenaError::InvalidConfig);
+    require!(args.fee_bps <= MAX_FEE_BPS, ArenaError::InvalidConfig);
+    arena.authority = authority;
+    arena.keeper = args.keeper;
+    arena.oracle_feed = args.oracle_feed;
+    arena.round_seconds = args.round_seconds;
+    arena.liquidity = args.liquidity;
+    arena.fee_bps = args.fee_bps;
+    arena.treasury = args.treasury_seed;
+    arena.bump = bump;
+    arena.market = market;
+    // Positions from different markets share a player's slots, so round ids must never collide.
+    arena.current.id = market_round_base(market);
+    Ok(())
+}
+
+/// Checks the authority stored in an arena account (bytes 8..40) without
+/// deserializing it, so it also works while the arena is delegated.
+fn require_stored_authority(arena: &AccountInfo, signer: &Pubkey) -> Result<()> {
+    let data = arena.try_borrow_data()?;
+    require!(
+        data.len() >= 40 && data[8..40] == signer.to_bytes()[..],
+        ArenaError::Unauthorized
+    );
+    Ok(())
 }
 
 fn settle_resolved_slots(arena: &mut Arena, player: &mut Player, now: i64) -> Result<u8> {
@@ -898,6 +1096,10 @@ fn settle_resolved_slots(arena: &mut Arena, player: &mut Player, now: i64) -> Re
 
 // -------------------------------------------------------------------------
 // Account contexts
+//
+// Arena accounts past setup are not seed-checked: Anchor checks the owner and
+// the Arena discriminator, and only the authority-gated init instructions can
+// create an Arena, so any market's arena is accepted.
 // -------------------------------------------------------------------------
 
 #[derive(Accounts)]
@@ -922,6 +1124,36 @@ pub struct DelegateArena<'info> {
     pub authority: Signer<'info>,
     /// CHECK: arena PDA; its stored authority is checked before delegating.
     #[account(mut, del, seeds = [ARENA_SEED], bump)]
+    pub arena: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(market: u8)]
+pub struct InitializeMarket<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// CHECK: the market 0 arena; its stored authority gates new markets.
+    #[account(seeds = [ARENA_SEED], bump)]
+    pub root_arena: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + Arena::SIZE,
+        seeds = [ARENA_SEED, market.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub arena: AccountLoader<'info, Arena>,
+    pub system_program: Program<'info, System>,
+}
+
+#[delegate]
+#[derive(Accounts)]
+#[instruction(market: u8)]
+pub struct DelegateMarket<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    /// CHECK: market arena PDA; its stored authority is checked before delegating.
+    #[account(mut, del, seeds = [ARENA_SEED, market.to_le_bytes().as_ref()], bump)]
     pub arena: AccountInfo<'info>,
 }
 
@@ -954,7 +1186,7 @@ pub struct DelegatePlayer<'info> {
 #[derive(Accounts, Session)]
 pub struct PlayerAction<'info> {
     pub signer: Signer<'info>,
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
     #[account(mut, seeds = [PLAYER_SEED, player.owner.as_ref()], bump = player.bump)]
     pub player: Account<'info, Player>,
@@ -966,7 +1198,6 @@ pub struct PlayerAction<'info> {
 #[derive(Accounts, Session)]
 pub struct PlayerView<'info> {
     pub signer: Signer<'info>,
-    #[account(seeds = [ARENA_SEED], bump)]
     pub arena: AccountLoader<'info, Arena>,
     #[account(mut, seeds = [PLAYER_SEED, player.owner.as_ref()], bump = player.bump)]
     pub player: Account<'info, Player>,
@@ -976,7 +1207,7 @@ pub struct PlayerView<'info> {
 
 #[derive(Accounts)]
 pub struct SettlePlayer<'info> {
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
     #[account(mut, seeds = [PLAYER_SEED, player.owner.as_ref()], bump = player.bump)]
     pub player: Account<'info, Player>,
@@ -990,7 +1221,7 @@ pub struct PlayerOnly<'info> {
 
 #[derive(Accounts)]
 pub struct RollRound<'info> {
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
     /// CHECK: validated against arena.oracle_feed and the oracle layout in the handler.
     pub price_feed: UncheckedAccount<'info>,
@@ -1001,7 +1232,6 @@ pub struct RollRound<'info> {
 pub struct RequestCheers<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(seeds = [ARENA_SEED], bump)]
     pub arena: AccountLoader<'info, Arena>,
     #[account(mut, seeds = [PLAYER_SEED, winner.owner.as_ref()], bump = winner.bump)]
     pub winner: Account<'info, Player>,
@@ -1013,7 +1243,7 @@ pub struct RequestCheers<'info> {
 #[vrf_callback]
 #[derive(Accounts)]
 pub struct CheersCallback<'info> {
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
     #[account(mut, seeds = [PLAYER_SEED, winner.owner.as_ref()], bump = winner.bump)]
     pub winner: Account<'info, Player>,
@@ -1023,7 +1253,7 @@ pub struct CheersCallback<'info> {
 pub struct ScheduleRoundCrank<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
     /// CHECK: checked against arena.oracle_feed.
     pub price_feed: UncheckedAccount<'info>,
@@ -1038,7 +1268,7 @@ pub struct ScheduleRoundCrank<'info> {
 #[derive(Accounts)]
 pub struct AuthorityArena<'info> {
     pub authority: Signer<'info>,
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
 }
 
@@ -1047,7 +1277,7 @@ pub struct AuthorityArena<'info> {
 pub struct CommitArena<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, seeds = [ARENA_SEED], bump)]
+    #[account(mut)]
     pub arena: AccountLoader<'info, Arena>,
 }
 
@@ -1063,4 +1293,189 @@ pub struct OwnerCommitPlayer<'info> {
         constraint = player.owner == owner.key() @ ArenaError::Unauthorized
     )]
     pub player: Account<'info, Player>,
+}
+
+#[cfg(test)]
+mod market_tests {
+    use super::*;
+    use anchor_lang::__private::bytemuck::Zeroable;
+    use core::mem::{offset_of, size_of};
+
+    fn args() -> InitializeArenaArgs {
+        InitializeArenaArgs {
+            oracle_feed: Pubkey::new_unique(),
+            keeper: Pubkey::new_unique(),
+            round_seconds: 300,
+            liquidity: 200 * USD,
+            fee_bps: 100,
+            treasury_seed: 1_000_000 * USD,
+        }
+    }
+
+    fn configured(market: u8) -> Box<Arena> {
+        let mut arena = Box::new(Arena::zeroed());
+        configure_arena(&mut arena, Pubkey::new_unique(), &args(), 254, market).unwrap();
+        arena
+    }
+
+    #[test]
+    fn market_field_reuses_the_old_pad_byte() {
+        assert_eq!(size_of::<Arena>(), Arena::SIZE);
+        assert_eq!(offset_of!(Arena, market), offset_of!(Arena, bump) + 1);
+        assert_eq!(offset_of!(Arena, current), offset_of!(Arena, bump) + 8);
+    }
+
+    #[test]
+    fn btc_keeps_its_round_ids() {
+        let arena = configured(0);
+        assert_eq!(arena.market, 0);
+        assert_eq!(arena.current.id, 0);
+        assert_eq!(arena.bump, 254);
+    }
+
+    #[test]
+    fn market_round_ids_never_collide() {
+        for market in 1..=8u8 {
+            let arena = configured(market);
+            assert_eq!(arena.market, market);
+            assert_eq!(arena.current.id, u64::from(market) << MARKET_ROUND_SHIFT);
+            // The first round opened by roll_round is base + 1 and stays inside this market's range.
+            let first = arena.current.id + 1;
+            assert_eq!(first >> MARKET_ROUND_SHIFT, u64::from(market));
+            assert!(market_round_base(market - 1) + (1 << MARKET_ROUND_SHIFT) - 1 < first);
+        }
+        // A player's slot lookup can't match another market's round even at the same round number.
+        let btc_round_7 = market_round_base(0) + 7;
+        let sol_round_7 = market_round_base(2) + 7;
+        assert_ne!(btc_round_7, sol_round_7);
+    }
+
+    #[test]
+    fn configure_copies_args_and_rejects_bad_config() {
+        let authority = Pubkey::new_unique();
+        let good = args();
+        let mut arena = Box::new(Arena::zeroed());
+        configure_arena(&mut arena, authority, &good, 1, 3).unwrap();
+        assert_eq!(arena.authority, authority);
+        assert_eq!(arena.oracle_feed, good.oracle_feed);
+        assert_eq!(arena.keeper, good.keeper);
+        assert_eq!(arena.treasury, good.treasury_seed);
+
+        let cases = [
+            InitializeArenaArgs { round_seconds: MIN_ROUND_SECONDS - 1, ..good },
+            InitializeArenaArgs { round_seconds: MAX_ROUND_SECONDS + 1, ..good },
+            InitializeArenaArgs { liquidity: MIN_LIQUIDITY - 1, ..good },
+            InitializeArenaArgs { fee_bps: MAX_FEE_BPS + 1, ..good },
+        ];
+        for bad in cases {
+            let mut arena = Box::new(Arena::zeroed());
+            assert!(configure_arena(&mut arena, authority, &bad, 1, 3).is_err());
+        }
+    }
+
+    #[test]
+    fn stored_authority_gate() {
+        let key = Pubkey::new_unique();
+        let owner = crate::ID;
+        let authority = Pubkey::new_unique();
+        let mut lamports = 0u64;
+        let mut data = vec![0u8; 8 + Arena::SIZE];
+        data[8..40].copy_from_slice(authority.as_ref());
+        let account = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &owner, false, 0);
+        assert!(require_stored_authority(&account, &authority).is_ok());
+        assert!(require_stored_authority(&account, &Pubkey::new_unique()).is_err());
+
+        let mut short_lamports = 0u64;
+        let mut short = vec![0u8; 39];
+        let short_account = AccountInfo::new(&key, false, false, &mut short_lamports, &mut short, &owner, false, 0);
+        assert!(require_stored_authority(&short_account, &Pubkey::default()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod cheers_tests {
+    use super::*;
+    use anchor_lang::__private::bytemuck::Zeroable;
+
+    #[test]
+    fn candidate_count_skips_empty_slots_the_winner_and_duplicates() {
+        let mut arena = Box::new(Arena::zeroed());
+        let (a, b, winner) = (Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique());
+        assert_eq!(arena.cheers_candidate_count(&winner), 0);
+        arena.push_recent(a);
+        arena.push_recent(winner);
+        arena.push_recent(b);
+        arena.push_recent(a);
+        assert_eq!(arena.cheers_candidate_count(&winner), 2);
+        assert_eq!(arena.cheers_candidate_count(&Pubkey::new_unique()), 3);
+    }
+
+    #[test]
+    fn vrf_seed_mixes_in_state_the_caller_cannot_choose() {
+        let caller = [7u8; 32];
+        let winner = Pubkey::new_unique();
+        let seed = cheers_seed(&caller, &winner, 5, 100, 1_000);
+        assert_ne!(seed, caller);
+        assert_ne!(seed, cheers_seed(&caller, &winner, 5, 101, 1_000));
+        assert_ne!(seed, cheers_seed(&caller, &winner, 6, 100, 1_000));
+        assert_ne!(seed, cheers_seed(&caller, &Pubkey::new_unique(), 5, 100, 1_000));
+        assert_eq!(seed, cheers_seed(&caller, &winner, 5, 100, 1_000));
+    }
+
+    #[test]
+    fn a_full_ring_fits_the_cap_and_vrf_still_excludes_someone() {
+        let mut arena = Box::new(Arena::zeroed());
+        for _ in 0..RECENT_TRADERS * 2 {
+            arena.push_recent(Pubkey::new_unique());
+        }
+        let winner = arena.recent[0];
+        assert_eq!(arena.cheers_candidate_count(&winner), MAX_CHEERS_CANDIDATES);
+        assert!(MAX_CHEERS_CANDIDATES > CHEERS_RECIPIENTS);
+    }
+}
+
+#[cfg(test)]
+mod badge_tests {
+    use super::*;
+
+    #[test]
+    fn merge_only_accumulates() {
+        let owner = Pubkey::new_unique();
+        let mut record = BadgeRecord { owner, ..BadgeRecord::default() };
+        let mut player = Player {
+            owner,
+            badges: 0b0101,
+            best_streak: 4,
+            calm_wins: 2,
+            trades_total: 30,
+            wins_total: 9,
+            ..Player::default()
+        };
+        record.merge(&player, 100);
+        assert_eq!(
+            (record.badges, record.best_streak, record.calm_wins, record.trades_total, record.wins_total, record.updates, record.updated_ts),
+            (0b0101, 4, 2, 30, 9, 1, 100)
+        );
+        // A stale commit with fewer badges and lower counters can't take anything away.
+        player.badges = 0b0010;
+        player.best_streak = 1;
+        player.calm_wins = 0;
+        player.trades_total = 3;
+        player.wins_total = 1;
+        record.merge(&player, 200);
+        assert_eq!(
+            (record.badges, record.best_streak, record.calm_wins, record.trades_total, record.wins_total, record.updates, record.updated_ts),
+            (0b0111, 4, 2, 30, 9, 2, 200)
+        );
+    }
+
+    #[test]
+    fn escrow_matches_the_delegation_program_derivation() {
+        let payer = Pubkey::new_unique();
+        let sdk = ephemeral_rollups_sdk::pda::ephemeral_balance_pda_from_payer(
+            &ephemeral_rollups_sdk::compat::Pubkey::new_from_array(payer.to_bytes()),
+            ACTION_ESCROW_INDEX,
+        );
+        assert_eq!(action_escrow(&payer).to_bytes(), sdk.to_bytes());
+    }
 }

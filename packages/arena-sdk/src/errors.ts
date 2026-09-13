@@ -1,3 +1,4 @@
+import { PROGRAM_ID } from './constants'
 import idl from './idl/rogs_arena.json'
 
 const programErrors = new Map<number, { name: string; msg: string }>(
@@ -34,9 +35,17 @@ export function describeLogs(logs: string[] | null | undefined): { message: stri
   }
   for (const line of logs) {
     const custom = line.match(/custom program error: (0x[0-9a-fA-F]+)/)
-    if (custom) {
+    if (!custom) continue
+    const failing = line.match(/^Program (\w+) failed:/)?.[1]
+    if (!failing || failing === PROGRAM_ID.toBase58()) {
       const code = Number.parseInt(custom[1], 16)
       return { message: programErrorMessage(code) ?? `Program error ${custom[1]}`, code }
+    }
+    // Another program failed (e.g. the System program creating an account); its own log line says why.
+    const reason = logs.find((entry) => /already in use|insufficient lamports/i.test(entry))
+    return {
+      message: reason ? reason.replace(/^(Allocate|Create Account|Transfer): /, '') : `Program ${failing} error ${custom[1]}`,
+      code: null,
     }
   }
   const failed = logs.find((line) => line.includes('failed:') || line.includes('Error:'))

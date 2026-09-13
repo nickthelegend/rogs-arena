@@ -21,7 +21,13 @@ export const saveTrade = (cols: Collections, trade: TradeDto) => insertOnce(cols
 export const saveClose = (cols: Collections, close: CloseDto) => insertOnce(cols.closes, { id: close.id }, close)
 export const saveSettlement = (cols: Collections, settlement: SettlementDto) =>
   insertOnce(cols.settlements, { id: settlement.id }, settlement)
-export const saveCheers = (cols: Collections, cheers: CheersDto) => insertOnce(cols.cheers, { sig: cheers.sig }, cheers)
+
+/** Inserts a cheers once. A copy saved without a market (its transaction was unreadable) gets it from a later pass. */
+export async function saveCheers(cols: Collections, cheers: CheersDto): Promise<boolean> {
+  if (await insertOnce(cols.cheers, { sig: cheers.sig }, cheers)) return true
+  if (cheers.market !== null) await cols.cheers.updateOne({ sig: cheers.sig, market: null }, { $set: { market: cheers.market } })
+  return false
+}
 export const savePoint = (cols: Collections, key: string, point: PointDto) =>
   insertOnce(cols.points, { key }, { ...point, key })
 
@@ -38,12 +44,12 @@ async function upsertRound(cols: Collections, filter: Filter<RoundDto>, update: 
 
 // Each writer only $sets the fields its source knows, so events and account reads can arrive in any order.
 export async function applyRoundOpened(cols: Collections, update: RoundOpenedUpdate): Promise<RoundDto | null> {
-  const { roundId, startTs, endTs, strikePrice, priceExpo, openedSig, liquidity } = update
+  const { market, roundId, startTs, endTs, strikePrice, priceExpo, openedSig, liquidity } = update
   await upsertRound(
     cols,
     { roundId },
     {
-      $set: { startTs, endTs, strikePrice, priceExpo, openedSig },
+      $set: { market, startTs, endTs, strikePrice, priceExpo, openedSig },
       $setOnInsert: {
         closePrice: null,
         outcome: null,
@@ -85,30 +91,39 @@ export async function getRound(cols: Collections, roundId: number): Promise<Roun
   return (await cols.rounds.findOne({ roundId }, hidden)) as RoundDto | null
 }
 
-export async function listRounds(cols: Collections, limit: number): Promise<RoundDto[]> {
-  return (await cols.rounds.find({}, hidden).sort({ roundId: -1 }).limit(limit).toArray()) as RoundDto[]
+/** The market's newest round: the one in progress, or the last one if the arena is paused. */
+export async function latestRound(cols: Collections, market: string): Promise<RoundDto | null> {
+  return (await cols.rounds.findOne({ market }, { ...hidden, sort: { roundId: -1 } })) as RoundDto | null
 }
 
+export async function listRounds(cols: Collections, market: string, limit: number): Promise<RoundDto[]> {
+  return (await cols.rounds.find({ market }, hidden).sort({ roundId: -1 }).limit(limit).toArray()) as RoundDto[]
+}
+
+// Round ids are unique across markets; `market` is still part of each query so a round id from another
+// market returns nothing and the per-market indexes are used.
+
 /** The newest `limit` trades of a round, returned in ascending time order. */
-export async function listTrades(cols: Collections, roundId: number, limit = 5_000): Promise<TradeDto[]> {
-  const docs = await cols.trades.find({ roundId }, hidden).sort({ t: -1, id: -1 }).limit(limit).toArray()
+export async function listTrades(cols: Collections, market: string, roundId: number, limit = 5_000): Promise<TradeDto[]> {
+  const docs = await cols.trades.find({ market, roundId }, hidden).sort({ t: -1, id: -1 }).limit(limit).toArray()
   return docs.reverse() as TradeDto[]
 }
 
-export async function listPoints(cols: Collections, roundId: number, limit = 5_000): Promise<PointDto[]> {
-  const docs = await cols.points.find({ roundId }, hidden).sort({ t: -1 }).limit(limit).toArray()
+export async function listPoints(cols: Collections, market: string, roundId: number, limit = 5_000): Promise<PointDto[]> {
+  const docs = await cols.points.find({ market, roundId }, hidden).sort({ t: -1 }).limit(limit).toArray()
   return docs.reverse() as PointDto[]
 }
 
-export async function listCloses(cols: Collections, roundId: number): Promise<CloseDto[]> {
-  return (await cols.closes.find({ roundId }, hidden).sort({ t: 1, id: 1 }).limit(5_000).toArray()) as CloseDto[]
+export async function listCloses(cols: Collections, market: string, roundId: number): Promise<CloseDto[]> {
+  return (await cols.closes.find({ market, roundId }, hidden).sort({ t: 1, id: 1 }).limit(5_000).toArray()) as CloseDto[]
 }
 
-export async function listSettlements(
-  cols: Collections,
-  filter: { roundId?: number; owner?: string },
-): Promise<SettlementDto[]> {
+/** Settlement filters; no `market` means every market (only an owner-only query asks for that). */
+export type SettlementScope = { market?: string; roundId?: number; owner?: string }
+
+export async function listSettlements(cols: Collections, filter: SettlementScope): Promise<SettlementDto[]> {
   const query: Filter<SettlementDto> = {}
+  if (filter.market !== undefined) query.market = filter.market
   if (filter.roundId !== undefined) query.roundId = filter.roundId
   if (filter.owner !== undefined) query.owner = filter.owner
   return (await cols.settlements.find(query, hidden).sort({ t: 1, id: 1 }).limit(1_000).toArray()) as SettlementDto[]

@@ -1,4 +1,5 @@
 import { ROUND_RESOLVED } from './constants'
+import { marketOfRound } from './markets'
 import type { CheersDto, CloseDto, Outcome, PointDto, RoundDto, SettlementDto, TradeDto } from './types'
 
 // Decoded Anchor values: BN / bigint / number for integers, PublicKey for keys.
@@ -87,6 +88,7 @@ export function yesPriceBps(yesPool: IntLike, noPool: IntLike): number {
 }
 
 const pointFromBps = (roundId: number, bps: number, t: number): PointDto => ({
+  market: marketOfRound(roundId),
   roundId,
   t,
   yes: bps / BPS,
@@ -100,6 +102,7 @@ export const pointFromPools = (roundId: number, yesPool: IntLike, noPool: IntLik
 export function mapTrade(sig: string, index: number, event: TradeExecutedEvent) {
   const id = eventId(sig, index)
   const roundId = toNumber(event.round_id)
+  const market = marketOfRound(roundId)
   const owner = event.owner.toBase58()
   const outcome = outcomeOf(event.outcome)
   const side = event.side === 1 ? 'SELL' : 'BUY'
@@ -112,6 +115,7 @@ export function mapTrade(sig: string, index: number, event: TradeExecutedEvent) 
   const trade: TradeDto = {
     id,
     sig,
+    market,
     roundId,
     owner,
     side,
@@ -129,6 +133,7 @@ export function mapTrade(sig: string, index: number, event: TradeExecutedEvent) 
     side === 'SELL'
       ? {
           id,
+          market,
           roundId,
           trader: owner,
           outcome,
@@ -141,12 +146,13 @@ export function mapTrade(sig: string, index: number, event: TradeExecutedEvent) 
   return { trade, point: pointFromBps(roundId, bps, t), close }
 }
 
-export type RoundOpenedUpdate = Pick<RoundDto, 'roundId' | 'startTs' | 'endTs' | 'strikePrice' | 'priceExpo'> & {
+export type RoundOpenedUpdate = Pick<RoundDto, 'market' | 'roundId' | 'startTs' | 'endTs' | 'strikePrice' | 'priceExpo'> & {
   liquidity: number
   openedSig: string
 }
 
 export const mapRoundOpened = (sig: string, event: RoundOpenedEvent): RoundOpenedUpdate => ({
+  market: marketOfRound(toNumber(event.round_id)),
   roundId: toNumber(event.round_id),
   startTs: toNumber(event.start_ts),
   endTs: toNumber(event.end_ts),
@@ -159,6 +165,7 @@ export const mapRoundOpened = (sig: string, event: RoundOpenedEvent): RoundOpene
 export type RoundResolvedUpdate = Omit<RoundDto, 'startTs' | 'endTs' | 'openedSig'> & { resolvedSig: string }
 
 export const mapRoundResolved = (sig: string, event: RoundResolvedEvent): RoundResolvedUpdate => ({
+  market: marketOfRound(toNumber(event.round_id)),
   roundId: toNumber(event.round_id),
   strikePrice: event.strike_price.toString(),
   closePrice: event.close_price.toString(),
@@ -174,6 +181,7 @@ export const mapRoundResolved = (sig: string, event: RoundResolvedEvent): RoundR
 export const mapSettlement = (sig: string, index: number, event: PositionSettledEvent): SettlementDto => ({
   id: eventId(sig, index),
   sig,
+  market: marketOfRound(toNumber(event.round_id)),
   roundId: toNumber(event.round_id),
   owner: event.owner.toBase58(),
   outcome: outcomeOf(event.outcome),
@@ -186,8 +194,10 @@ export const mapSettlement = (sig: string, index: number, event: PositionSettled
   t: toNumber(event.ts) * 1000,
 })
 
-export const mapCheers = (sig: string, event: CheersPaidEvent): CheersDto => ({
+/** CheersPaid carries no round id; `market` comes from the arena account in the callback transaction. */
+export const mapCheers = (sig: string, event: CheersPaidEvent, market: string | null): CheersDto => ({
   sig,
+  market,
   owner: event.owner.toBase58(),
   recipients: event.recipients.map(key => key.toBase58()),
   amountEach: toUsd(event.amount_each),
@@ -223,6 +233,7 @@ export type ChainRound = Omit<RoundDto, 'openedSig' | 'resolvedSig'>
 export function roundFromState(state: ArenaRoundState): ChainRound {
   const resolved = state.status === ROUND_RESOLVED
   return {
+    market: marketOfRound(toNumber(state.id)),
     roundId: toNumber(state.id),
     startTs: toNumber(state.startTs),
     endTs: toNumber(state.endTs),
@@ -238,6 +249,7 @@ export function roundFromState(state: ArenaRoundState): ChainRound {
 }
 
 export const roundFromSummary = (summary: ArenaRoundSummary): ChainRound => ({
+  market: marketOfRound(toNumber(summary.id)),
   roundId: toNumber(summary.id),
   startTs: toNumber(summary.startTs),
   endTs: toNumber(summary.endTs),

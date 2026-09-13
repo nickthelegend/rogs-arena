@@ -19,6 +19,7 @@ import {
   type RoundResolvedEvent,
   type TradeExecutedEvent,
 } from './mappers'
+import { roundNumberOf, type Market } from './markets'
 import type { RealtimeHub } from './realtime'
 import {
   applyRoundOpened,
@@ -37,16 +38,19 @@ import { errorMessage, mapLimit, throttled } from './util'
 const BACKFILL_LIMIT = 1_000
 const BACKFILL_CONCURRENCY = 8
 const CATCH_UP_DELAY_MS = 20_000
+/** Mongo writes per heartbeat run for this many markets at once; the ER read is a single call either way. */
+const PULSE_CONCURRENCY = 3
+const ROUND_KEYS_MAX = 128
 export const HEARTBEAT_MS = 5_000
 
 export class Indexer {
   private logsSubscription: number | null = null
-  private accountSubscription: number | null = null
+  private readonly accountSubscriptions: number[] = []
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private catchUpTimer: ReturnType<typeof setTimeout> | null = null
   private pulsing = false
-  private stateKey: string | null = null
-  private historyKey: string | null = null
+  private readonly stateKeys = new Map<string, string>()
+  private readonly historyKeys = new Map<string, string>()
   private readonly roundKeys = new Map<number, string>()
   private readonly warn = throttled(30_000)
 
@@ -59,6 +63,7 @@ export class Indexer {
 
   start(): void {
     // Subscribe before backfilling so nothing lands in the gap; writes are idempotent.
+    // One log subscription covers every market: events carry namespaced round ids.
     this.logsSubscription = this.chain.er.onLogs(
       this.chain.programId,
       ({ signature, err, logs }) => {
@@ -67,15 +72,22 @@ export class Indexer {
       },
       'confirmed',
     )
-    this.accountSubscription = this.chain.er.onAccountChange(
-      this.chain.arena,
-      info => {
-        void this.onArenaAccount(info.data)
-      },
-      { commitment: 'confirmed' },
-    )
+    // An arena that is not bootstrapped yet simply stays silent until it exists; the heartbeat re-reads it too.
+    for (const market of this.chain.markets) {
+      this.accountSubscriptions.push(
+        this.chain.er.onAccountChange(
+          market.arena,
+          info => {
+            void this.onArenaAccount(market, info.data)
+          },
+          { commitment: 'confirmed' },
+        ),
+      )
+    }
     this.heartbeatTimer = setInterval(() => void this.pulse(), HEARTBEAT_MS)
-    console.log(`[indexer] watching program ${this.chain.programId.toBase58()} and arena ${this.chain.arena.toBase58()} on the ER`)
+    console.log(
+      `[indexer] watching program ${this.chain.programId.toBase58()} and ${this.chain.markets.length} market arenas (${this.chain.markets.map(market => market.symbol).join(', ')}) on the ER`,
+    )
     void this.pulse()
     void this.backfill().then(newest => {
       // The ER's signature index lags a few seconds, so transactions from just before boot can be missing
@@ -89,16 +101,19 @@ export class Indexer {
     if (this.catchUpTimer) clearTimeout(this.catchUpTimer)
     const removals: Promise<void>[] = []
     if (this.logsSubscription !== null) removals.push(this.chain.er.removeOnLogsListener(this.logsSubscription))
-    if (this.accountSubscription !== null) removals.push(this.chain.er.removeAccountChangeListener(this.accountSubscription))
+    for (const id of this.accountSubscriptions) removals.push(this.chain.er.removeAccountChangeListener(id))
     await Promise.allSettled(removals)
   }
 
-  /** Indexes every event in one transaction's logs. Live events are also broadcast when new. */
-  async processTransaction(signature: string, logs: string[], live: boolean): Promise<number> {
+  /**
+   * Indexes every event in one transaction's logs. Live events are also broadcast when new.
+   * `accounts` are the transaction's account keys when already known (backfill); live logs carry none.
+   */
+  async processTransaction(signature: string, logs: string[], live: boolean, accounts?: string[]): Promise<number> {
     const events = this.chain.parseEvents(logs)
     for (const event of events) {
       try {
-        await this.handleEvent(signature, event, live)
+        await this.handleEvent(signature, event, live, accounts)
       } catch (error) {
         console.error(`[indexer] ${event.name} ${signature}:${event.index} failed: ${errorMessage(error)}`)
       }
@@ -110,7 +125,7 @@ export class Indexer {
     return events.length
   }
 
-  private async handleEvent(sig: string, event: ParsedEvent, live: boolean): Promise<void> {
+  private async handleEvent(sig: string, event: ParsedEvent, live: boolean, accounts?: string[]): Promise<void> {
     switch (event.name) {
       case 'TradeExecuted': {
         const { trade, point, close } = mapTrade(sig, event.index, event.data as TradeExecutedEvent)
@@ -140,7 +155,10 @@ export class Indexer {
         return
       }
       case 'CheersPaid': {
-        const cheers = mapCheers(sig, event.data as CheersPaidEvent)
+        // CheersPaid has no round id; the paying arena is an account of the VRF callback transaction.
+        const market = this.chain.marketOfAccounts(accounts ?? (await this.chain.transactionAccounts(sig)))
+        if (!market) console.warn(`[indexer] cheers ${sig}: arena not found in the transaction; saved without a market`)
+        const cheers = mapCheers(sig, event.data as CheersPaidEvent, market?.symbol ?? null)
         if ((await saveCheers(this.cols, cheers)) && live) this.hub.broadcast('cheers', { cheers })
         return
       }
@@ -173,7 +191,8 @@ export class Indexer {
             commitment: 'confirmed',
           })
           if (!tx?.meta || tx.meta.err || !tx.meta.logMessages) return
-          const count = await this.processTransaction(info.signature, tx.meta.logMessages, false)
+          const accounts = tx.transaction.message.staticAccountKeys.map(key => key.toBase58())
+          const count = await this.processTransaction(info.signature, tx.meta.logMessages, false, accounts)
           events += count
           if (count && tx.blockTime) newestEventAt = Math.max(newestEventAt, tx.blockTime * 1000)
         } catch (error) {
@@ -194,33 +213,39 @@ export class Indexer {
     }
   }
 
-  private async onArenaAccount(data: Buffer): Promise<void> {
+  private async onArenaAccount(market: Market, data: Buffer): Promise<void> {
     try {
-      await this.syncArena(this.chain.decodeArena(data))
+      const arena = this.chain.decodeArena(data)
+      if (arena.market === market.id) await this.syncArena(market, arena)
     } catch (error) {
-      this.warn('arena-account', () => console.warn(`[indexer] arena update failed: ${errorMessage(error)}`))
+      this.warn(`arena-account:${market.symbol}`, () =>
+        console.warn(`[indexer] ${market.symbol} arena update failed: ${errorMessage(error)}`),
+      )
     }
   }
 
-  /** Mirrors the Arena account into `rounds` and broadcasts when a round opens or resolves. */
-  private async syncArena(arena: ArenaAccount): Promise<void> {
+  /** Mirrors one market's Arena account into `rounds` and broadcasts when a round opens or resolves. */
+  private async syncArena(market: Market, arena: ArenaAccount): Promise<void> {
     const { current } = arena
     const roundId = toNumber(current.id)
-    if (roundId > 0) {
+    // A freshly initialized market arena holds its bare base id (round number 0) until the first roll.
+    if (roundNumberOf(roundId) > 0) {
       await syncRoundFromChain(this.cols, roundFromState(current))
       const key = `${roundId}:${current.status}`
-      if (key !== this.stateKey) {
-        this.stateKey = key
+      if (key !== this.stateKeys.get(market.symbol)) {
+        this.stateKeys.set(market.symbol, key)
         const round = await getRound(this.cols, roundId)
         if (round) this.broadcastRound(round)
       }
     }
     const historyKey = `${arena.historyHead.toString()}:${arena.historyLen.toString()}`
-    if (historyKey !== this.historyKey) {
+    if (historyKey !== this.historyKeys.get(market.symbol)) {
       for (const summary of arena.history) {
-        if (toNumber(summary.id) > 0 && summary.outcome !== 0) await syncRoundFromChain(this.cols, roundFromSummary(summary))
+        if (roundNumberOf(toNumber(summary.id)) > 0 && summary.outcome !== 0) {
+          await syncRoundFromChain(this.cols, roundFromSummary(summary))
+        }
       }
-      this.historyKey = historyKey
+      this.historyKeys.set(market.symbol, historyKey)
     }
   }
 
@@ -228,27 +253,38 @@ export class Indexer {
     const key = `${round.outcome ?? 'open'}:${round.startTs}:${round.openedSig}:${round.resolvedSig}`
     if (this.roundKeys.get(round.roundId) === key) return
     this.roundKeys.set(round.roundId, key)
-    if (this.roundKeys.size > 32) {
+    if (this.roundKeys.size > ROUND_KEYS_MAX) {
       const oldest = this.roundKeys.keys().next().value
       if (oldest !== undefined) this.roundKeys.delete(oldest)
     }
     this.hub.broadcast('round', { round })
   }
 
-  /** Every 5 s: re-reads the arena (covers a dropped subscription) and records a price point while open. */
+  /**
+   * Every 5 s: re-reads all market arenas in one ER call (covers dropped subscriptions and arenas bootstrapped
+   * since the last read) and records a price point for each market whose round is open.
+   */
   private async pulse(): Promise<void> {
     if (this.pulsing) return
     this.pulsing = true
     try {
-      const arena = await this.chain.fetchArena()
-      if (!arena) return
-      await this.syncArena(arena)
-      const { current } = arena
+      const arenas = await this.chain.fetchArenas()
       const now = Date.now()
-      if (current.status !== ROUND_OPEN || now >= toNumber(current.endTs) * 1000) return
-      const roundId = toNumber(current.id)
-      const point = pointFromPools(roundId, current.yesPool, current.noPool, now)
-      if (await savePoint(this.cols, `hb:${roundId}:${now}`, point)) this.hub.broadcast('point', { point })
+      await mapLimit(arenas, PULSE_CONCURRENCY, async ({ market, account }) => {
+        if (!account) return
+        try {
+          await this.syncArena(market, account)
+          const { current } = account
+          if (current.status !== ROUND_OPEN || now >= toNumber(current.endTs) * 1000) return
+          const roundId = toNumber(current.id)
+          const point = pointFromPools(roundId, current.yesPool, current.noPool, now)
+          if (await savePoint(this.cols, `hb:${roundId}:${now}`, point)) this.hub.broadcast('point', { point })
+        } catch (error) {
+          this.warn(`pulse:${market.symbol}`, () =>
+            console.warn(`[indexer] ${market.symbol} heartbeat failed: ${errorMessage(error)}`),
+          )
+        }
+      })
     } catch (error) {
       this.warn('pulse', () => console.warn(`[indexer] heartbeat failed: ${errorMessage(error)}`))
     } finally {

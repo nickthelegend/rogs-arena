@@ -11,9 +11,9 @@ import {
 
 import { accountLayer, fetchPlayer, type PlayerState } from './accounts'
 import { waitForDelegation, type ArenaConnections } from './connections'
-import { BTC_USD_FEED, PROGRAM_ID, VRF_EPHEMERAL_QUEUE, type OutcomeCode } from './constants'
+import { PROGRAM_ID, VRF_EPHEMERAL_QUEUE, marketById, type OutcomeCode } from './constants'
 import { ArenaTxError, describeLogs } from './errors'
-import { arenaPda, playerPda, sessionTokenPda } from './pda'
+import { arenaPda, badgeRecordPda, playerPda, sessionTokenPda } from './pda'
 import arenaIdl from './idl/rogs_arena.json'
 import sessionIdl from './idl/gpl_session.json'
 
@@ -100,6 +100,29 @@ export class ArenaInstructions {
       .instruction() as Promise<TransactionInstruction>
   }
 
+  /** Opens coin market `market` (1..); signed by the market 0 arena authority. */
+  initializeMarket(authority: PublicKey, market: number, args: InitializeArenaArgs) {
+    return this.methods
+      .initializeMarket(market, {
+        oracleFeed: args.oracleFeed,
+        keeper: args.keeper,
+        roundSeconds: bn(args.roundSeconds),
+        liquidity: bn(args.liquidity),
+        feeBps: bn(args.feeBps),
+        treasurySeed: bn(args.treasurySeed),
+      })
+      .accountsPartial({ authority, rootArena: arenaPda(this.programId), arena: arenaPda(this.programId, market) })
+      .instruction() as Promise<TransactionInstruction>
+  }
+
+  delegateMarket(authority: PublicKey, market: number, validator: PublicKey) {
+    return this.methods
+      .delegateMarket(market)
+      .accountsPartial({ authority, arena: arenaPda(this.programId, market) })
+      .remainingAccounts([{ pubkey: validator, isSigner: false, isWritable: false }])
+      .instruction() as Promise<TransactionInstruction>
+  }
+
   initPlayer(owner: PublicKey) {
     return this.methods
       .initPlayer()
@@ -129,41 +152,41 @@ export class ArenaInstructions {
       .instruction() as Promise<TransactionInstruction>
   }
 
-  private playerAction(method: string, args: unknown[], signer: PublicKey, owner: PublicKey, sessionToken: PublicKey | null) {
+  private playerAction(method: string, args: unknown[], signer: PublicKey, owner: PublicKey, sessionToken: PublicKey | null, market: number) {
     return this.methods[method](...args)
       .accountsPartial({
         signer,
-        arena: arenaPda(this.programId),
+        arena: arenaPda(this.programId, market),
         player: playerPda(owner, this.programId),
         sessionToken,
       })
       .instruction() as Promise<TransactionInstruction>
   }
 
-  claimChips(signer: PublicKey, owner: PublicKey, sessionToken: PublicKey | null) {
-    return this.playerAction('claimChips', [], signer, owner, sessionToken)
+  claimChips(signer: PublicKey, owner: PublicKey, sessionToken: PublicKey | null, market = 0) {
+    return this.playerAction('claimChips', [], signer, owner, sessionToken, market)
   }
 
-  buy(signer: PublicKey, owner: PublicKey, outcome: OutcomeCode, amount: bigint, minShares: bigint, ability: number, sessionToken: PublicKey | null) {
-    return this.playerAction('buy', [outcome, bn(amount), bn(minShares), ability], signer, owner, sessionToken)
+  buy(signer: PublicKey, owner: PublicKey, outcome: OutcomeCode, amount: bigint, minShares: bigint, ability: number, sessionToken: PublicKey | null, market = 0) {
+    return this.playerAction('buy', [outcome, bn(amount), bn(minShares), ability], signer, owner, sessionToken, market)
   }
 
-  sell(signer: PublicKey, owner: PublicKey, outcome: OutcomeCode, shares: bigint, minOut: bigint, sessionToken: PublicKey | null) {
-    return this.playerAction('sell', [outcome, bn(shares), bn(minOut)], signer, owner, sessionToken)
+  sell(signer: PublicKey, owner: PublicKey, outcome: OutcomeCode, shares: bigint, minOut: bigint, sessionToken: PublicKey | null, market = 0) {
+    return this.playerAction('sell', [outcome, bn(shares), bn(minOut)], signer, owner, sessionToken, market)
   }
 
-  attachAbility(signer: PublicKey, owner: PublicKey, ability: number, sessionToken: PublicKey | null) {
-    return this.playerAction('attachAbility', [ability], signer, owner, sessionToken)
+  attachAbility(signer: PublicKey, owner: PublicKey, ability: number, sessionToken: PublicKey | null, market = 0) {
+    return this.playerAction('attachAbility', [ability], signer, owner, sessionToken, market)
   }
 
-  reportHeart(signer: PublicKey, owner: PublicKey, bpm: number, sessionToken: PublicKey | null) {
-    return this.playerAction('reportHeart', [bpm], signer, owner, sessionToken)
+  reportHeart(signer: PublicKey, owner: PublicKey, bpm: number, sessionToken: PublicKey | null, market = 0) {
+    return this.playerAction('reportHeart', [bpm], signer, owner, sessionToken, market)
   }
 
-  settlePlayer(owner: PublicKey) {
+  settlePlayer(owner: PublicKey, market = 0) {
     return this.methods
       .settlePlayer()
-      .accountsPartial({ arena: arenaPda(this.programId), player: playerPda(owner, this.programId) })
+      .accountsPartial({ arena: arenaPda(this.programId, market), player: playerPda(owner, this.programId) })
       .instruction() as Promise<TransactionInstruction>
   }
 
@@ -174,20 +197,20 @@ export class ArenaInstructions {
       .instruction() as Promise<TransactionInstruction>
   }
 
-  rollRound(priceFeed: PublicKey = BTC_USD_FEED) {
+  rollRound(market = 0) {
     return this.methods
       .rollRound()
-      .accountsPartial({ arena: arenaPda(this.programId), priceFeed })
+      .accountsPartial({ arena: arenaPda(this.programId, market), priceFeed: marketById(market).feed })
       .instruction() as Promise<TransactionInstruction>
   }
 
-  requestCheers(payer: PublicKey, winnerOwner: PublicKey, candidateOwners: PublicKey[], callerSeed: Uint8Array) {
+  requestCheers(payer: PublicKey, winnerOwner: PublicKey, candidateOwners: PublicKey[], callerSeed: Uint8Array, market = 0) {
     if (callerSeed.length !== 32) throw new Error('callerSeed must be 32 bytes')
     return this.methods
       .requestCheers(Array.from(callerSeed))
       .accountsPartial({
         payer,
-        arena: arenaPda(this.programId),
+        arena: arenaPda(this.programId, market),
         winner: playerPda(winnerOwner, this.programId),
         oracleQueue: VRF_EPHEMERAL_QUEUE,
       })
@@ -197,24 +220,29 @@ export class ArenaInstructions {
       .instruction() as Promise<TransactionInstruction>
   }
 
-  scheduleRoundCrank(authority: PublicKey, taskId: bigint, intervalMs: number, iterations: number, priceFeed: PublicKey = BTC_USD_FEED) {
+  scheduleRoundCrank(authority: PublicKey, taskId: bigint, intervalMs: number, iterations: number, market = 0) {
     return this.methods
       .scheduleRoundCrank(bn(taskId), bn(intervalMs), bn(iterations))
-      .accountsPartial({ authority, arena: arenaPda(this.programId), priceFeed, program: this.programId })
+      .accountsPartial({
+        authority,
+        arena: arenaPda(this.programId, market),
+        priceFeed: marketById(market).feed,
+        program: this.programId,
+      })
       .instruction() as Promise<TransactionInstruction>
   }
 
-  fundTreasury(authority: PublicKey, amount: bigint) {
+  fundTreasury(authority: PublicKey, amount: bigint, market = 0) {
     return this.methods
       .fundTreasury(bn(amount))
-      .accountsPartial({ authority, arena: arenaPda(this.programId) })
+      .accountsPartial({ authority, arena: arenaPda(this.programId, market) })
       .instruction() as Promise<TransactionInstruction>
   }
 
-  commitArena(payer: PublicKey) {
+  commitArena(payer: PublicKey, market = 0) {
     return this.methods
       .commitArena()
-      .accountsPartial({ payer, arena: arenaPda(this.programId) })
+      .accountsPartial({ payer, arena: arenaPda(this.programId, market) })
       .instruction() as Promise<TransactionInstruction>
   }
 
@@ -229,6 +257,26 @@ export class ArenaInstructions {
     return this.methods
       .undelegatePlayer()
       .accountsPartial({ owner, player: playerPda(owner, this.programId) })
+      .instruction() as Promise<TransactionInstruction>
+  }
+
+  /** Base layer: creates the owner's badge record. */
+  initBadgeRecord(owner: PublicKey) {
+    return this.methods
+      .initBadgeRecord()
+      .accountsPartial({ owner, badgeRecord: badgeRecordPda(owner, this.programId) })
+      .instruction() as Promise<TransactionInstruction>
+  }
+
+  /** ER: commits the Player and runs record_badges on Solana as a post-commit Magic Action. Owner-signed. */
+  commitPlayerBadges(owner: PublicKey) {
+    return this.methods
+      .commitPlayerBadges()
+      .accountsPartial({
+        owner,
+        player: playerPda(owner, this.programId),
+        badgeRecord: badgeRecordPda(owner, this.programId),
+      })
       .instruction() as Promise<TransactionInstruction>
   }
 }

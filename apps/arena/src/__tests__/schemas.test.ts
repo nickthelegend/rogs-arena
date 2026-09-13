@@ -3,6 +3,7 @@ import { Keypair } from '@solana/web3.js'
 import { env, parseEnv } from '../env'
 import { HttpError } from '../errors'
 import {
+  arenaQuerySchema,
   chatQuerySchema,
   cheersQuerySchema,
   nonceBodySchema,
@@ -68,9 +69,9 @@ describe('HTTP body validation', () => {
 
 describe('query validation', () => {
   test('limits default, clamp and reject junk', () => {
-    expect(parseInput(roundsQuerySchema, {})).toEqual({ limit: 96 })
-    expect(parseInput(roundsQuerySchema, { limit: '10' })).toEqual({ limit: 10 })
-    expect(parseInput(roundsQuerySchema, { limit: '5000' })).toEqual({ limit: 200 })
+    expect(parseInput(roundsQuerySchema, {})).toEqual({ market: 'BTC', limit: 96 })
+    expect(parseInput(roundsQuerySchema, { limit: '10' })).toEqual({ market: 'BTC', limit: 10 })
+    expect(parseInput(roundsQuerySchema, { limit: '5000' })).toEqual({ market: 'BTC', limit: 200 })
     expect(parseInput(chatQuerySchema, {})).toEqual({ limit: 50 })
     expect(parseInput(cheersQuerySchema, { limit: '999' })).toEqual({ limit: 100 })
     expect(inputError(() => parseInput(roundsQuerySchema, { limit: 'abc' }))).toBe('limit: limit must be a positive integer')
@@ -78,17 +79,35 @@ describe('query validation', () => {
   })
 
   test('roundId is a required non-negative integer', () => {
-    expect(parseInput(roundQuerySchema, { roundId: '42' })).toEqual({ roundId: 42 })
+    expect(parseInput(roundQuerySchema, { roundId: '42' })).toEqual({ market: 'BTC', roundId: 42 })
+    // Namespaced ids (market * 2^40 + n) stay exact numbers.
+    expect(parseInput(roundQuerySchema, { market: 'ETH', roundId: '1099511627779' })).toEqual({ market: 'ETH', roundId: 1_099_511_627_779 })
     expect(inputError(() => parseInput(roundQuerySchema, {}))).toBe('roundId: roundId is required')
     expect(inputError(() => parseInput(roundQuerySchema, { roundId: '-1' }))).toBe(
       'roundId: roundId must be a non-negative integer',
     )
   })
 
-  test('settlement filters are both optional', () => {
-    expect(parseInput(settlementsQuerySchema, {})).toEqual({})
-    expect(parseInput(settlementsQuerySchema, { roundId: '3', owner: wallet })).toEqual({ roundId: 3, owner: wallet })
+  test('market is an exact ticker, BTC when missing', () => {
+    expect(parseInput(arenaQuerySchema, {})).toEqual({ market: 'BTC' })
+    for (const market of ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'DOGE', 'SUI', 'AVAX', 'LINK']) {
+      expect(parseInput(arenaQuerySchema, { market })).toEqual({ market })
+    }
+    const unknown = 'market: market must be one of BTC, ETH, SOL, BNB, XRP, DOGE, SUI, AVAX, LINK'
+    expect(inputError(() => parseInput(arenaQuerySchema, { market: 'sol' }))).toBe(unknown)
+    expect(inputError(() => parseInput(arenaQuerySchema, { market: '' }))).toBe(unknown)
+    expect(inputError(() => parseInput(roundsQuerySchema, { market: 'PEPE' }))).toBe(unknown)
+    expect(inputError(() => parseInput(roundQuerySchema, { market: 'BTC-5M', roundId: '1' }))).toBe(unknown)
+  })
+
+  test('settlement filters: an owner-only query spans all markets, anything else is one market', () => {
+    expect(parseInput(settlementsQuerySchema, {})).toEqual({ market: 'BTC' })
+    expect(parseInput(settlementsQuerySchema, { owner: wallet })).toEqual({ owner: wallet })
+    expect(parseInput(settlementsQuerySchema, { owner: wallet, market: 'SOL' })).toEqual({ market: 'SOL', owner: wallet })
+    expect(parseInput(settlementsQuerySchema, { roundId: '3', owner: wallet })).toEqual({ market: 'BTC', roundId: 3, owner: wallet })
+    expect(parseInput(settlementsQuerySchema, { roundId: '3', market: 'XRP' })).toEqual({ market: 'XRP', roundId: 3 })
     expect(inputError(() => parseInput(settlementsQuerySchema, { owner: 'nope' }))).toBe('owner: Invalid wallet address')
+    expect(inputError(() => parseInput(settlementsQuerySchema, { owner: wallet, market: 'btc' }))).toStartWith('market: ')
   })
 })
 
@@ -96,13 +115,24 @@ describe('websocket message validation', () => {
   const parse = (message: unknown) => wsClientMessageSchema.safeParse(message)
 
   test('hello with and without a token', () => {
-    expect(parse({ type: 'hello', sessionId: 'tab-1' }).data).toEqual({ type: 'hello', sessionId: 'tab-1' })
-    expect(parse({ type: 'hello', sessionId: 'tab-1', token: 'abc' }).data).toEqual({
+    expect(parse({ type: 'hello', sessionId: 'tab-1' }).data).toEqual({ type: 'hello', sessionId: 'tab-1', market: 'BTC' })
+    expect(parse({ type: 'hello', sessionId: 'tab-1', token: 'abc', market: 'SUI' }).data).toEqual({
       type: 'hello',
       sessionId: 'tab-1',
       token: 'abc',
+      market: 'SUI',
     })
     expect(parse({ type: 'hello', sessionId: '' }).success).toBe(false)
+    expect(parse({ type: 'hello', sessionId: 'tab-1', market: 'Sui' }).success).toBe(false)
+  })
+
+  test('market switch frames need a known ticker', () => {
+    expect(parse({ type: 'market', market: 'AVAX' }).data).toEqual({ type: 'market', market: 'AVAX' })
+    expect(parse({ type: 'market' }).success).toBe(false)
+    expect(parse({ type: 'market', market: 7 }).success).toBe(false)
+    const result = parse({ type: 'market', market: 'FOO' })
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0]?.message).toBe('market must be one of BTC, ETH, SOL, BNB, XRP, DOGE, SUI, AVAX, LINK')
   })
 
   test('heart bpm must be 30..230 or null', () => {

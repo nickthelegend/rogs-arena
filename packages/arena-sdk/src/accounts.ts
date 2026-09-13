@@ -4,6 +4,7 @@ import { Buffer } from 'buffer'
 
 import {
   DELEGATION_PROGRAM_ID,
+  marketById,
   OUTCOME_NO,
   OUTCOME_YES,
   PROGRAM_ID,
@@ -11,7 +12,7 @@ import {
   ROUND_RESOLVED,
 } from './constants'
 import { yesProbability } from './math'
-import { arenaPda, playerPda } from './pda'
+import { arenaPda, badgeRecordPda, playerPda } from './pda'
 import idl from './idl/rogs_arena.json'
 
 export const arenaCoder = new BorshCoder(idl as Idl)
@@ -41,6 +42,8 @@ export type RoundSummary = Omit<RoundState, 'collateral' | 'status'>
 
 export type ArenaState = {
   address: PublicKey
+  /** Coin market id; see MARKETS. */
+  market: number
   authority: PublicKey
   keeper: PublicKey
   oracleFeed: PublicKey
@@ -131,6 +134,7 @@ export function decodeArena(address: PublicKey, data: Uint8Array): ArenaState {
     .map(({ collateral: _collateral, status: _status, ...summary }) => summary)
   return {
     address,
+    market: raw.market ?? 0,
     authority: raw.authority,
     keeper: raw.keeper,
     oracleFeed: raw.oracle_feed,
@@ -195,8 +199,8 @@ export function decodePlayer(address: PublicKey, data: Uint8Array): PlayerState 
   }
 }
 
-export async function fetchArena(er: Connection, programId: PublicKey = PROGRAM_ID) {
-  const address = arenaPda(programId)
+export async function fetchArena(er: Connection, programId: PublicKey = PROGRAM_ID, market = 0) {
+  const address = arenaPda(programId, market)
   const account = await er.getAccountInfo(address, 'confirmed')
   if (!account) throw new Error('The arena account was not found on the ephemeral rollup')
   return decodeArena(address, account.data)
@@ -225,10 +229,11 @@ export function subscribeArena(
   onArena: (arena: ArenaState) => void,
   onError: (error: Error) => void,
   programId: PublicKey = PROGRAM_ID,
+  market = 0,
 ) {
-  const address = arenaPda(programId)
+  const address = arenaPda(programId, market)
   let disposed = false
-  fetchArena(er, programId)
+  fetchArena(er, programId, market)
     .then((arena) => !disposed && onArena(arena))
     .catch((error: unknown) => !disposed && onError(error instanceof Error ? error : new Error(String(error))))
   const id = er.onAccountChange(
@@ -289,11 +294,19 @@ export function outcomeLabel(outcome: number): 'YES' | 'NO' | null {
   return null
 }
 
-export const MARKET_QUESTION = 'BTC closes at or above its opening price'
+export function marketQuestion(symbol: string) {
+  return `${symbol} closes at or above its opening price`
+}
+
+export const MARKET_QUESTION = marketQuestion('BTC')
 
 /** UI-facing market object that mirrors the fields rizz-club components read. */
 export type ArenaMarket = {
   id: string
+  /** Coin market id; see MARKETS. */
+  market: number
+  /** Coin ticker, e.g. SOL. */
+  asset: string
   symbol: string
   quote: string
   active: boolean
@@ -320,11 +333,14 @@ export type ArenaMarket = {
 
 export function toArenaMarket(arena: ArenaState, nowSeconds = Math.floor(Date.now() / 1000)): ArenaMarket | null {
   const current = arena.current
-  if (current.id === 0) return null
-  const symbol = `BTC-5M-R${current.id}`
+  if (current.status === 0) return null
+  const asset = marketById(arena.market).symbol
+  const symbol = `${asset}-5M-R${current.id}`
   const yesPrice = yesProbability(current.yesPool, current.noPool)
   return {
     id: String(current.id),
+    market: arena.market,
+    asset,
     symbol,
     quote: 'CHIPS',
     active: current.status === ROUND_OPEN && nowSeconds < current.endTs,
@@ -337,7 +353,7 @@ export function toArenaMarket(arena: ArenaState, nowSeconds = Math.floor(Date.no
       tradingStart: current.startTs,
       expiry: current.endTs,
       intervalSec: arena.roundSeconds,
-      question: MARKET_QUESTION,
+      question: marketQuestion(asset),
       venueId: 'rogs-arena',
     },
     roundId: current.id,
@@ -351,4 +367,54 @@ export function toArenaMarket(arena: ArenaState, nowSeconds = Math.floor(Date.no
     liquidity: arena.liquidity,
     feeBps: arena.feeBps,
   }
+}
+
+export type BadgeRecordState = {
+  address: PublicKey
+  owner: PublicKey
+  badges: number
+  bestStreak: number
+  calmWins: number
+  tradesTotal: number
+  winsTotal: number
+  /** How many post-commit Magic Actions have merged into this record. */
+  updates: number
+  updatedTs: number
+}
+
+export function decodeBadgeRecord(address: PublicKey, data: Uint8Array): BadgeRecordState {
+  const raw = arenaCoder.accounts.decode('BadgeRecord', Buffer.from(data)) as Raw
+  return {
+    address,
+    owner: raw.owner,
+    badges: raw.badges,
+    bestStreak: raw.best_streak,
+    calmWins: raw.calm_wins,
+    tradesTotal: raw.trades_total,
+    winsTotal: raw.wins_total,
+    updates: raw.updates,
+    updatedTs: toNum(raw.updated_ts),
+  }
+}
+
+/** The owner's badge record on Solana; null until init_badge_record has run. */
+export async function fetchBadgeRecord(base: Connection, owner: PublicKey, programId: PublicKey = PROGRAM_ID) {
+  const address = badgeRecordPda(owner, programId)
+  const account = await base.getAccountInfo(address, 'confirmed')
+  if (!account || !account.owner.equals(programId)) return null
+  return decodeBadgeRecord(address, account.data)
+}
+
+/**
+ * Fair Cheers candidates: every distinct recent trader except the winner. The program rejects a
+ * request_cheers that leaves any of them out.
+ */
+export function fairCheersCandidates(arena: Pick<ArenaState, 'recent'>, winner: PublicKey): PublicKey[] {
+  const seen = new Set<string>()
+  return arena.recent.filter((owner) => {
+    const id = owner.toBase58()
+    if (owner.equals(PublicKey.default) || owner.equals(winner) || seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
 }

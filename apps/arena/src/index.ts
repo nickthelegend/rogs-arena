@@ -1,5 +1,5 @@
 import { ArenaChain } from './chain'
-import { connectDb } from './db'
+import { connectDb, migrateMarkets } from './db'
 import { env } from './env'
 import { createFetchHandler } from './http'
 import { Indexer } from './indexer'
@@ -16,10 +16,24 @@ const status: ServiceStatus = {
 const database = await connectDb(env.MONGODB_URI, env.MONGODB_DB)
 console.log(`[boot] mongo connected, db ${env.MONGODB_DB}, indexes ready`)
 
+// During a rolling deploy the previous instance keeps indexing without `market` for a short while after this one
+// migrated at boot; a second pass stamps what it wrote.
+const LATE_MIGRATION_MS = 3 * 60_000
+const lateMigration = setTimeout(() => {
+  migrateMarkets(database.cols).then(
+    counts => {
+      const stamped = Object.entries(counts).filter(([, count]) => count > 0)
+      if (stamped.length) console.log(`[db] late market stamp: ${stamped.map(([name, count]) => `${name} ${count}`).join(', ')}`)
+    },
+    error => console.error(`[db] late market stamp failed: ${errorMessage(error)}`),
+  )
+}, LATE_MIGRATION_MS)
+
 const chain = new ArenaChain(env)
 console.log(
-  `[boot] program ${chain.programId.toBase58()}, arena ${chain.arena.toBase58()}, keeper ${chain.keeper.publicKey.toBase58()}, faucet ${chain.faucet.publicKey.toBase58()}, idl ${env.IDL_PATH}`,
+  `[boot] program ${chain.programId.toBase58()}, keeper ${chain.keeper.publicKey.toBase58()}, faucet ${chain.faucet.publicKey.toBase58()}, idl ${env.IDL_PATH}`,
 )
+console.log(`[boot] markets ${chain.markets.map(market => `${market.symbol}=${market.arena.toBase58()}`).join(' ')}`)
 
 const hub = new RealtimeHub(database.cols)
 const server = Bun.serve<SocketData>({
@@ -45,6 +59,7 @@ async function shutdown(signal: string) {
   if (shuttingDown) return
   shuttingDown = true
   console.log(`[boot] ${signal} received, shutting down`)
+  clearTimeout(lateMigration)
   try {
     await keeper?.stop()
     await indexer?.stop()

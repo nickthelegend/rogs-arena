@@ -239,6 +239,6 @@ describe('accounts and events', () => {
   test('describes anchor errors from logs', () => {
     const logs = ['Program log: AnchorError occurred. Error Code: TradingLocked. Error Number: 6004. Error Message: Trading is locked in the final seconds of the round.']
     expect(describeLogs(logs)).toEqual({ message: 'Trading is locked in the final seconds of the round', code: 6004 })
-    expect(describeLogs(['Program X failed: custom program error: 0x1775'])?.message).toBe('Invalid outcome')
+    expect(describeLogs([`Program ${PROGRAM_ID.toBase58()} failed: custom program error: 0x1775`])?.message).toBe('Invalid outcome')
   })
 })

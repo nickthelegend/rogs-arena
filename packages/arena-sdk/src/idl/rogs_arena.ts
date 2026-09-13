@@ -31,21 +31,7 @@ export type RogsArena = {
           "signer": true
         },
         {
-          "name": "arena",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "name": "arena"
         },
         {
           "name": "player",
@@ -102,21 +88,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "player",
@@ -192,21 +164,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "winner",
@@ -264,21 +222,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "player",
@@ -334,21 +278,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "magicProgram",
@@ -397,6 +327,85 @@ export type RogsArena = {
                   121,
                   101,
                   114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magicProgram",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magicContext",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commitPlayerBadges",
+      "docs": [
+        "ER: commits the Player to Solana and schedules `record_badges` to run there right after",
+        "the commit lands (a post-commit Magic Action). The Player stays delegated."
+      ],
+      "discriminator": [
+        38,
+        184,
+        118,
+        46,
+        91,
+        191,
+        167,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "badgeRecord",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101,
+                  115
                 ]
               },
               {
@@ -599,6 +608,197 @@ export type RogsArena = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "delegateMarket",
+      "discriminator": [
+        223,
+        125,
+        110,
+        148,
+        99,
+        176,
+        143,
+        72
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bufferArena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                254,
+                100,
+                243,
+                32,
+                79,
+                16,
+                81,
+                95,
+                101,
+                68,
+                249,
+                10,
+                141,
+                166,
+                103,
+                28,
+                69,
+                80,
+                111,
+                239,
+                30,
+                4,
+                220,
+                196,
+                106,
+                100,
+                22,
+                194,
+                26,
+                68,
+                60,
+                186
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegationRecordArena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegationProgram"
+            }
+          }
+        },
+        {
+          "name": "delegationMetadataArena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arena"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegationProgram"
+            }
+          }
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ownerProgram",
+          "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q"
+        },
+        {
+          "name": "delegationProgram",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "delegatePlayer",
@@ -809,21 +1009,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         }
       ],
       "args": [
@@ -832,6 +1018,57 @@ export type RogsArena = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "initBadgeRecord",
+      "docs": [
+        "Base layer: creates the owner's badge record. The Player can already be delegated."
+      ],
+      "discriminator": [
+        42,
+        225,
+        48,
+        193,
+        214,
+        188,
+        46,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "badgeRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initPlayer",
@@ -923,6 +1160,86 @@ export type RogsArena = {
         }
       ],
       "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "initializeArenaArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initializeMarket",
+      "docs": [
+        "Opens another coin market. Only the authority of the market 0 arena can."
+      ],
+      "discriminator": [
+        35,
+        35,
+        189,
+        193,
+        155,
+        48,
+        170,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rootArena",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "arena",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  101,
+                  110,
+                  97
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market",
+          "type": "u8"
+        },
         {
           "name": "args",
           "type": {
@@ -1039,6 +1356,90 @@ export type RogsArena = {
       ]
     },
     {
+      "name": "recordBadges",
+      "docs": [
+        "Base layer, callable only as the Magic Action (the escrow signer proves it): merges the",
+        "freshly committed Player's achievements into the owner's badge record."
+      ],
+      "discriminator": [
+        49,
+        250,
+        232,
+        36,
+        112,
+        57,
+        178,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "badgeRecord",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  100,
+                  103,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "badge_record.owner",
+                "account": "badgeRecord"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "badge_record.owner",
+                "account": "badgeRecord"
+              }
+            ]
+          }
+        },
+        {
+          "name": "sourceProgram",
+          "docs": [
+            "right after the action's own accounts; pinning it to this program rejects actions scheduled elsewhere."
+          ],
+          "address": "J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q"
+        },
+        {
+          "name": "escrowAuth"
+        },
+        {
+          "name": "escrow",
+          "docs": [
+            "came through the post-commit path and not from a wallet."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reportHeart",
       "discriminator": [
         226,
@@ -1056,21 +1457,7 @@ export type RogsArena = {
           "signer": true
         },
         {
-          "name": "arena",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "name": "arena"
         },
         {
           "name": "player",
@@ -1130,21 +1517,7 @@ export type RogsArena = {
           "signer": true
         },
         {
-          "name": "arena",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "name": "arena"
         },
         {
           "name": "winner",
@@ -1281,21 +1654,7 @@ export type RogsArena = {
       "accounts": [
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "priceFeed"
@@ -1326,21 +1685,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "priceFeed"
@@ -1388,21 +1733,7 @@ export type RogsArena = {
         },
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "player",
@@ -1466,21 +1797,7 @@ export type RogsArena = {
       "accounts": [
         {
           "name": "arena",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  97,
-                  114,
-                  101,
-                  110,
-                  97
-                ]
-              }
-            ]
-          }
+          "writable": true
         },
         {
           "name": "player",
@@ -1581,6 +1898,19 @@ export type RogsArena = {
       ]
     },
     {
+      "name": "badgeRecord",
+      "discriminator": [
+        2,
+        38,
+        88,
+        9,
+        1,
+        122,
+        36,
+        245
+      ]
+    },
+    {
       "name": "player",
       "discriminator": [
         205,
@@ -1632,6 +1962,19 @@ export type RogsArena = {
         20,
         199,
         166
+      ]
+    },
+    {
+      "name": "badgesRecorded",
+      "discriminator": [
+        111,
+        46,
+        54,
+        83,
+        246,
+        28,
+        73,
+        73
       ]
     },
     {
@@ -1920,6 +2263,11 @@ export type RogsArena = {
       "code": 6030,
       "name": "invalidQueue",
       "msg": "Invalid VRF queue"
+    },
+    {
+      "code": 6031,
+      "name": "cheersCandidatesIncomplete",
+      "msg": "Every recent trader except the winner must be a Cheers candidate"
     }
   ],
   "types": [
@@ -2038,11 +2386,18 @@ export type RogsArena = {
             "type": "u8"
           },
           {
+            "name": "market",
+            "docs": [
+              "Coin market id (0 = BTC). Round ids carry it in their high bits."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "pad",
             "type": {
               "array": [
                 "u8",
-                7
+                6
               ]
             }
           },
@@ -2091,6 +2446,89 @@ export type RogsArena = {
           {
             "name": "needed",
             "type": "u64"
+          },
+          {
+            "name": "ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "badgeRecord",
+      "docs": [
+        "Base-layer achievements, written only by the post-commit Magic Action of `commit_player_badges`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "badges",
+            "type": "u32"
+          },
+          {
+            "name": "bestStreak",
+            "type": "u16"
+          },
+          {
+            "name": "calmWins",
+            "type": "u32"
+          },
+          {
+            "name": "tradesTotal",
+            "type": "u32"
+          },
+          {
+            "name": "winsTotal",
+            "type": "u32"
+          },
+          {
+            "name": "updates",
+            "type": "u32"
+          },
+          {
+            "name": "updatedTs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "badgesRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "badges",
+            "type": "u32"
+          },
+          {
+            "name": "bestStreak",
+            "type": "u16"
+          },
+          {
+            "name": "calmWins",
+            "type": "u32"
+          },
+          {
+            "name": "tradesTotal",
+            "type": "u32"
+          },
+          {
+            "name": "updates",
+            "type": "u32"
           },
           {
             "name": "ts",

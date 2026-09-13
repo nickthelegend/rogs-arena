@@ -65,4 +65,6 @@ pub enum ArenaError {
     MathOverflow,
     #[msg("Invalid VRF queue")]
     InvalidQueue,
+    #[msg("Every recent trader except the winner must be a Cheers candidate")]
+    CheersCandidatesIncomplete,
 }

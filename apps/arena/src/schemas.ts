@@ -1,6 +1,7 @@
 import bs58 from 'bs58'
 import { z } from 'zod'
 import { HttpError } from './errors'
+import { DEFAULT_MARKET, isMarketSymbol, UNKNOWN_MARKET_MESSAGE } from './markets'
 
 export function isWalletAddress(value: string): boolean {
   if (value.length < 32 || value.length > 44) return false
@@ -50,12 +51,26 @@ const limitParam = (fallback: number, max: number) =>
     .optional()
     .transform(value => Math.min(value ?? fallback, max))
 
-export const roundsQuerySchema = z.object({ limit: limitParam(96, 200) })
-export const roundQuerySchema = z.object({ roundId: intParam('roundId') })
-export const settlementsQuerySchema = z.object({
-  roundId: intParam('roundId').optional(),
-  owner: walletSchema.optional(),
-})
+/** A coin ticker such as BTC or SOL, case-sensitive. */
+export const marketSchema = z.string({ error: UNKNOWN_MARKET_MESSAGE }).refine(isMarketSymbol, { message: UNKNOWN_MARKET_MESSAGE })
+// A missing market means BTC so clients from before multi-market support keep working.
+const marketParam = marketSchema.default(DEFAULT_MARKET)
+
+export const arenaQuerySchema = z.object({ market: marketParam })
+export const roundsQuerySchema = z.object({ market: marketParam, limit: limitParam(96, 200) })
+export const roundQuerySchema = z.object({ market: marketParam, roundId: intParam('roundId') })
+/** An owner-only query (no market, no roundId) spans every market; anything else is scoped to one, BTC by default. */
+export const settlementsQuerySchema = z
+  .object({
+    market: marketSchema.optional(),
+    roundId: intParam('roundId').optional(),
+    owner: walletSchema.optional(),
+  })
+  .transform(({ market, ...filters }) =>
+    market === undefined && filters.roundId === undefined && filters.owner !== undefined
+      ? filters
+      : { market: market ?? DEFAULT_MARKET, ...filters },
+  )
 export const chatQuerySchema = z.object({ limit: limitParam(50, 200) })
 export const cheersQuerySchema = z.object({ limit: limitParam(20, 100) })
 
@@ -67,7 +82,9 @@ export const wsClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('hello'),
     sessionId: z.string().min(1, 'sessionId is required').max(128),
     token: z.string().max(256).nullish(),
+    market: marketParam,
   }),
+  z.object({ type: z.literal('market'), market: marketSchema }),
   z.object({ type: z.literal('presence') }),
   z.object({
     type: z.literal('heart'),

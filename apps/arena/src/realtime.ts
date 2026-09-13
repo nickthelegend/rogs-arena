@@ -12,7 +12,8 @@ export const ARENA_TOPIC = 'arena'
 const TRADERS_MIN_INTERVAL_MS = 1_000
 const WS_OPEN = 1
 
-export type SocketData = { connId: string; sessionId: string | null; wallet: string | null }
+/** `market` is the market whose snapshot the socket last asked for; broadcasts still go to every socket. */
+export type SocketData = { connId: string; sessionId: string | null; wallet: string | null; market: string }
 type Socket = ServerWebSocket<SocketData>
 type Publisher = { publish(topic: string, data: string): unknown }
 
@@ -86,12 +87,16 @@ export class RealtimeHub {
   }
 
   private async handle(ws: Socket, message: WsClientMessage): Promise<void> {
-    if (message.type === 'hello') return this.onHello(ws, message.sessionId, message.token ?? null)
+    if (message.type === 'hello') return this.onHello(ws, message.sessionId, message.token ?? null, message.market)
     const { sessionId, wallet } = ws.data
     if (!sessionId) return this.sendError(ws, 'Send hello first')
     if (this.presence.join(sessionId, ws.data.connId, wallet)) this.tradersChanged()
 
     if (message.type === 'presence') return
+    if (message.type === 'market') {
+      ws.data.market = message.market
+      return this.sendSnapshot(ws, message.market)
+    }
     if (!wallet) return this.sendError(ws, message.type === 'chat' ? 'Sign in to chat' : 'Sign in to share heart rate')
     if (message.type === 'heart') {
       if (this.presence.setHeart(wallet, message.bpm)) this.tradersChanged()
@@ -102,7 +107,7 @@ export class RealtimeHub {
     this.broadcast('chat', { message: result.chat })
   }
 
-  private async onHello(ws: Socket, sessionId: string, token: string | null): Promise<void> {
+  private async onHello(ws: Socket, sessionId: string, token: string | null, market: string): Promise<void> {
     const wallet = token ? await walletForToken(this.cols, token, this.clock()) : null
     if (wallet) {
       const user = await getUser(this.cols, wallet)
@@ -112,12 +117,18 @@ export class RealtimeHub {
     if (ws.data.sessionId && ws.data.sessionId !== sessionId) this.presence.leave(ws.data.sessionId, ws.data.connId)
     ws.data.sessionId = sessionId
     ws.data.wallet = wallet
+    ws.data.market = market
     const changed = this.presence.join(sessionId, ws.data.connId, wallet)
     // Subscribe before building the snapshot so no broadcast falls between the two.
     ws.subscribe(ARENA_TOPIC)
-    const snapshot = await buildSnapshot(this.cols, this.presence, this.clock())
-    if (ws.readyState === WS_OPEN) ws.send(JSON.stringify({ type: 'snapshot', data: snapshot }))
+    await this.sendSnapshot(ws, market)
     if (changed) this.tradersChanged()
+  }
+
+  /** Sends a market snapshot, unless the socket switched to another market while it was being built. */
+  private async sendSnapshot(ws: Socket, market: string): Promise<void> {
+    const snapshot = await buildSnapshot(this.cols, this.presence, market, this.clock())
+    if (ws.readyState === WS_OPEN && ws.data.market === market) ws.send(JSON.stringify({ type: 'snapshot', data: snapshot }))
   }
 
   private sendError(ws: Socket, error: string): void {
