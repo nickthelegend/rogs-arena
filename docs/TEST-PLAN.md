@@ -112,7 +112,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | UI-23 | Backend down | B | With the Railway API unreachable, chat/leaderboard show a readable error; trading on the ER still works | Partial PASS (headless Chrome, service host blocked for HTTP and WebSocket after guest setup): page renders with 0 page errors; leaderboard shows "Could not load trades."; the island loads 250 chips from chain; Buy UP succeeded on the ER in 216 ms. Defect found: chat gave no readable error (placeholder stayed "What’s that"). Fixed in a4dc203 (chat reads "Chat is offline. Reconnecting to the arena…" and blocks sending); re-verify pending |
 | UI-24 | Proof page `/proof` | B | Live delegation status (router), crank last roll, oracle price and age, last VRF cheers, last commit, program and explorer links — all real | NOT RUN |
 | UI-25 | Responsive | B | 390px and 1440px widths: no horizontal overflow, controls reachable | NOT RUN |
-| UI-26 | No mocks anywhere | S | `grep -ri "mock\|stub\|fake\|dummy\|placeholder\|lorem"` in apps/, packages/, programs/ → only legitimate uses (test doubles, input placeholder attrs), each justified | NOT RUN |
+| UI-26 | No mocks anywhere | S | `grep -ri "mock\|stub\|fake\|dummy\|placeholder\|lorem"` in apps/, packages/, programs/ → only legitimate uses (test doubles, input placeholder attrs), each justified | PASS: the grep over apps/web, apps/arena, packages and programs (ts, tsx, rs; excluding node_modules, .next, target) matched only `stub` in section-history.tsx (the length in px of the history path segment, not a test stub) and "No mocks" doc comments in the verification scripts. No mock, fake, dummy or sample data anywhere |
 
 ## 5. Deploy and integration
 
@@ -121,7 +121,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | DEP-01 | Railway deploy | Build succeeds, `/health` ok, logs show indexer subscribed and keeper running | PASS: the Dockerfile build succeeded (Railpack had detected Rust; fixed). Boot log shows mongo connected, indexer watching the program, keeper started; /health ok |
 | DEP-02 | Atlas from Railway | `/health.mongo=true` and writes visible in Atlas | PASS: /health mongo:true from Railway; probe user, session and faucet writes were read back through the API and then removed |
 | DEP-03 | Vercel deploy | Production build succeeds from apps/web with workspace packages | PASS: https://rogs-arena.vercel.app READY (dpl_2NrjTfYJv5NT323ysH2EP5rr9REX), built from apps/web with workspace packages; all 10 NEXT_PUBLIC vars match env.ts |
-| DEP-04 | GitHub | `main` contains all code; no secrets committed (`git grep` for key material and the Mongo URI returns nothing) | NOT RUN |
+| DEP-04 | GitHub | `main` contains all code; no secrets committed (`git grep` for key material and the Mongo URI returns nothing) | PASS: git grep over tracked files finds no Mongo URI, password fragment, PEM key or byte-array keypair; full history (git log -p --all) has 0 hits; 0 tracked .env files (only .env.example). Keypairs stay in ~/.config/solana |
 
 ---
 
