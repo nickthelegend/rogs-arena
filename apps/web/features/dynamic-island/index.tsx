@@ -19,7 +19,6 @@ import {
 } from '@/lib/trade-setup'
 import { traderIdentity } from '@/lib/traders'
 import { useIslandStore } from '@/stores/island'
-import { ABILITY_NONE } from '@rogs/arena-sdk'
 import { AnimatePresence, useReducedMotion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import AppliedTag from './applied-tag'
@@ -81,7 +80,9 @@ function useReleaseAppliedOnMarketEnd() {
       bindApplied()
       return
     }
-    if (positionAbility !== ABILITY_NONE) return
+    // A position holding a different card still gets the attempt: the program rejects it with its own
+    // message ("already attached"), and the card goes back to the rack instead of staying parked and
+    // riding on (and failing) the next buy.
     if (attemptedCardRef.current === applied.id) return
     attemptedCardRef.current = applied.id
 
