@@ -63,7 +63,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | API-08 | auth verify: good signature / bad signature / reused nonce | H | token / 401 / 401 | PASS: `verify-live-api.ts` got a token for a good signature, 401 Invalid signature for a bad one, 401 for a reused nonce |
 | API-09 | `POST /api/profile` without token; invalid name; valid | H | 401; 400; 200 ProfileDto, then `GET /api/profile/:wallet` returns it | PASS: 401 without token, 400 invalid name, 200 ProfileDto, and GET /api/profile/:wallet returns the same name |
 | API-10 | `POST /api/faucet` without token; funded wallet; unfunded wallet; repeat | H | 401; `{skipped:true}`; `{signature}` whose transfer of 0.02 SOL lands on devnet; 429 | PASS: 401 without token; unfunded wallet got 20000000 lamports (tx XwZceLQD…, balance 0.02 SOL on devnet); funded repeat skipped:true; after draining below 0.01, repeat got 429 wallet limit |
-| API-11 | CORS | H | Vercel origin gets `access-control-allow-origin`; a foreign origin doesn't | PASS for the current allow-list: http://localhost:3000 gets allow-origin on preflight and GET; https://evil.example.com gets none. The Vercel origin is re-checked after DEP-03 |
+| API-11 | CORS | H | Vercel origin gets `access-control-allow-origin`; a foreign origin doesn't | PASS: https://rogs-arena.vercel.app gets access-control-allow-origin on GET /api/arena (200) and on the POST /api/profile preflight (204, Content-Type and Authorization allowed); https://evil.example.com gets no allow-origin |
 | API-12 | Errors | H | Unknown route → 404 JSON `{error}`; no stack traces anywhere | PASS: 404 Not found, 405 Method not allowed, 400 Invalid JSON body; no stack traces in any error body |
 
 ## 3. Realtime WebSocket, indexer, keeper
