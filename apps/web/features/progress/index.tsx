@@ -1,6 +1,9 @@
 'use client'
 
+import { useBadgeRecord } from '@/hooks/use-badge-record'
 import { useProgress } from '@/hooks/use-progress'
+import { badgeRecordSummary } from '@/lib/badge-record'
+import { explorerTxUrl } from '@rogs/arena-sdk'
 import { progressTracks } from '@/lib/progress'
 import Image from 'next/image'
 
@@ -65,6 +68,47 @@ function StageTrack({ value, max }: { value: number; max: number }) {
   )
 }
 
+function BadgeRecordRow() {
+  const { record, save, canSave, saveToSolana } = useBadgeRecord()
+  const line =
+    save.phase === 'saving' ? save.step : save.phase === 'error' ? save.message : badgeRecordSummary(record)
+
+  return (
+    <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/10 pt-2">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className={`truncate font-sans text-[12px] ${save.phase === 'error' ? 'text-red-400' : 'text-white/50'}`} title={line}>
+          {line}
+        </span>
+        {save.phase === 'saved' && (
+          <span className="font-sans text-[12px] text-white/50">
+            Saved by a MagicBlock Magic Action ·{' '}
+            <a className="underline hover:text-white" href={explorerTxUrl(save.erSignature, 'er')} target="_blank" rel="noreferrer">
+              rollup tx
+            </a>
+            {save.baseSignature && (
+              <>
+                {' · '}
+                <a className="underline hover:text-white" href={explorerTxUrl(save.baseSignature, 'base')} target="_blank" rel="noreferrer">
+                  Solana tx
+                </a>
+              </>
+            )}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        disabled={!canSave}
+        onClick={() => void saveToSolana()}
+        title={canSave ? 'Commit your player and write your badges on Solana' : 'Join the arena first to save badges'}
+        className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 font-sans text-[12px] font-semibold text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {save.phase === 'saving' ? 'Saving…' : 'Save to Solana'}
+      </button>
+    </div>
+  )
+}
+
 export default function SectionProgress() {
   const state = useProgress()
   const tracks = progressTracks(state)
@@ -90,6 +134,7 @@ export default function SectionProgress() {
           </li>
         ))}
       </ul>
+      <BadgeRecordRow />
     </section>
   )
 }
