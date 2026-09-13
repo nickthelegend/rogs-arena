@@ -21,7 +21,14 @@ function MarketPriceFeed() {
   const narrow = useNarrowLayout()
   const [chartMode, setChartMode] = useState<'line' | 'candle'>('line')
   const [windowSecs, setWindowSecs] = useState(defaultWindowSecs)
-  const { latest, points: pricePoints, status: priceStatus, error: priceError, symbol, market: coin } = useMarketPrice()
+  const {
+    latest,
+    points: pricePoints,
+    status: priceStatus,
+    error: priceError,
+    symbol,
+    market: coin,
+  } = useMarketPrice({ history: true })
   const decimals = coin.priceDecimals
   const formatPrice = useCallback((value: number) => formatMarketPrice(value, decimals), [decimals])
   const candleWidth = candleWidthForWindow(windowSecs)

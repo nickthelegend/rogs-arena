@@ -99,9 +99,10 @@ export function livePriceToPoint(price: LivePrice): LivelinePoint {
   }
 }
 
+/** Valid points in time order, one per time (the last one given wins), capped to the newest PRICE_TICKS. */
 export function normalizePricePoints(points: LivelinePoint[]) {
   return points
-    .filter((point) => Number.isFinite(point.value) && point.value > 0)
+    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value) && point.value > 0)
     .sort((left, right) => left.time - right.time)
     .filter((point, index, sorted) => index === sorted.length - 1 || point.time !== sorted[index + 1].time)
     .slice(-PRICE_TICKS)

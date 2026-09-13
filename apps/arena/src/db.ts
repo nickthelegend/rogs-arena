@@ -39,6 +39,8 @@ export type MetaDoc = {
   lastCommitAt?: number
   settledThrough?: number
 }
+/** One MagicBlock oracle sample; `t` is the feed's publish time in ms, `expiresAt` drives the 6 h TTL. */
+export type PriceDoc = { market: string; t: number; price: number; expiresAt: Date }
 export type KeeperLogDoc = {
   t: number
   level: 'info' | 'warn' | 'error'
@@ -62,6 +64,7 @@ export type Collections = {
   sessions: Collection<SessionDoc>
   meta: Collection<MetaDoc>
   keeper_log: Collection<KeeperLogDoc>
+  prices: Collection<PriceDoc>
 }
 
 export type Database = {
@@ -88,6 +91,7 @@ export function getCollections(db: Db): Collections {
     sessions: db.collection<SessionDoc>('sessions'),
     meta: db.collection<MetaDoc>('meta'),
     keeper_log: db.collection<KeeperLogDoc>('keeper_log'),
+    prices: db.collection<PriceDoc>('prices'),
   }
 }
 
@@ -183,5 +187,7 @@ export async function ensureIndexes(cols: Collections): Promise<void> {
     cols.nonces.createIndex({ wallet: 1 }),
     cols.sessions.createIndex({ token: 1 }, { unique: true }),
     cols.sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    cols.prices.createIndex({ market: 1, t: 1 }, { unique: true }),
+    cols.prices.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
   ])
 }

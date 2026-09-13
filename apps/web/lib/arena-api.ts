@@ -124,6 +124,9 @@ export type MarketDto = {
   round: RoundDto | null
 }
 
+/** A stored MagicBlock oracle price: `t` is the feed's publish time in ms, `price` is USD. */
+export type PricePointDto = { t: number; price: number }
+
 export type HealthDto = {
   ok: boolean
   mongo: boolean
@@ -248,6 +251,11 @@ export function getPoints(roundId: number, market: MarketSymbol, signal?: AbortS
 
 export function getCloses(roundId: number, market: MarketSymbol, signal?: AbortSignal) {
   return request<CloseDto[]>(`/api/closes${query({ market, roundId })}`, { signal })
+}
+
+/** The coin's stored oracle prices since `since` (ms), ascending; the service keeps 6 hours and returns at most 2,000. */
+export function getPriceHistory(market: MarketSymbol, since: number, signal?: AbortSignal) {
+  return request<PricePointDto[]>(`/api/prices${query({ market, since: Math.max(0, Math.floor(since)) })}`, { signal })
 }
 
 /** `owner` alone returns that wallet's settlements in every market. */

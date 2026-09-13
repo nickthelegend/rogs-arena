@@ -4,6 +4,7 @@ import { env } from './env'
 import { createFetchHandler } from './http'
 import { Indexer } from './indexer'
 import { Keeper } from './keeper'
+import { PriceSampler } from './prices'
 import { RealtimeHub, type SocketData } from './realtime'
 import type { ServiceStatus } from './types'
 import { errorMessage } from './util'
@@ -11,6 +12,7 @@ import { errorMessage } from './util'
 const status: ServiceStatus = {
   indexer: { enabled: env.INDEXER_ENABLED, lastSig: null, lastEventAt: null },
   keeper: { enabled: env.KEEPER_ENABLED, lastRollSig: null, lastRollAt: null },
+  prices: { enabled: env.PRICE_SAMPLER_ENABLED, lastSampleAt: null },
 }
 
 const database = await connectDb(env.MONGODB_URI, env.MONGODB_DB)
@@ -50,6 +52,10 @@ const indexer = env.INDEXER_ENABLED ? new Indexer(chain, database.cols, hub, sta
 indexer?.start()
 if (!indexer) console.log('[boot] indexer disabled')
 
+const sampler = env.PRICE_SAMPLER_ENABLED ? new PriceSampler(chain.er, chain.markets, database.cols, status) : null
+sampler?.start()
+if (!sampler) console.log('[boot] price sampler disabled')
+
 const keeper = env.KEEPER_ENABLED ? new Keeper(chain, database.cols, status, database.keeperLogCapped) : null
 keeper?.start()
 if (!keeper) console.log('[boot] keeper disabled')
@@ -63,6 +69,7 @@ async function shutdown(signal: string) {
   try {
     await keeper?.stop()
     await indexer?.stop()
+    await sampler?.stop()
     hub.stop()
     await server.stop(true)
     await database.client.close()

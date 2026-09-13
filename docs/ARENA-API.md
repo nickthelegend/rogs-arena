@@ -156,19 +156,25 @@ type MarketDto = {
   available: boolean       // Arena account exists on the ER
   round: RoundDto | null   // that market's newest round (same as ArenaSnapshot.round)
 }
+
+type PricePointDto = {
+  t: number                // the MagicBlock oracle feed's publish time, ms
+  price: number            // USD
+}
 ```
 
 ## HTTP routes
 
 | Method | Path | Auth | Response |
 |---|---|---|---|
-| GET | `/health` | – | `{ ok, mongo, er, programId, arena, markets, indexer: { enabled, lastSig, lastEventAt }, keeper: { enabled, lastRollSig, lastRollAt } }` where `arena: { roundId, status: 'idle' \| 'open' \| 'resolved', endTs } \| null` is **BTC** (unchanged shape) and `markets: { market, available, roundId: number \| null, status: 'idle' \| 'open' \| 'resolved' \| null, endTs: number \| null }[]` in MARKETS order, read live from the ER (nulls when not available) |
+| GET | `/health` | – | `{ ok, mongo, er, programId, arena, markets, indexer: { enabled, lastSig, lastEventAt }, keeper: { enabled, lastRollSig, lastRollAt }, prices: { enabled, lastSampleAt } }` where `arena: { roundId, status: 'idle' \| 'open' \| 'resolved', endTs } \| null` is **BTC** (unchanged shape) and `markets: { market, available, roundId: number \| null, status: 'idle' \| 'open' \| 'resolved' \| null, endTs: number \| null }[]` in MARKETS order, read live from the ER (nulls when not available) |
 | GET | `/api/markets` | – | `MarketDto[]` in MARKETS order (always 9 rows) |
 | GET | `/api/arena?market=` | – | `ArenaSnapshot` for that market |
 | GET | `/api/rounds?market=&limit=96` | – | `RoundDto[]` of that market, newest first (limit ≤ 200) |
 | GET | `/api/trades?market=&roundId=` | – | `TradeDto[]` ascending (empty if `roundId` belongs to another market) |
 | GET | `/api/points?market=&roundId=` | – | `PointDto[]` ascending |
 | GET | `/api/closes?market=&roundId=` | – | `CloseDto[]` |
+| GET | `/api/prices?market=&since=` | – | `PricePointDto[]` ascending `t`: that market's stored oracle prices with `t >= since`. `since` is ms and optional: it defaults to now − 1 h and is clamped to at most 6 h back. At most 2,000 rows; when more match, the most recent 2,000. A `since` that is not a non-negative integer is a 400 `since: since must be a non-negative integer`. |
 | GET | `/api/settlements?market=&roundId=&owner=` | – | `SettlementDto[]` ascending `t`, ≤ 1000. With `owner` and neither `market` nor `roundId`, the rows cover **all markets**. Otherwise they are scoped to `market` (BTC when missing), and `roundId`/`owner` narrow further. |
 | GET | `/api/chat?limit=50` | – | `ChatDto[]` ascending |
 | GET | `/api/cheers?limit=20` | – | `CheersDto[]` newest first, all markets |
@@ -231,6 +237,14 @@ One log subscription covers every market, and each event's market comes from its
   - On startup, an idempotent migration stamps `market` on older documents that lack it.
   - It derives the value from `roundId`; cheers get `BTC`.
   - Per-market queries use `{ market, roundId }` / `{ market, owner }` indexes.
+
+## Price history (arena service)
+
+- Every 2 s the service reads the nine MagicBlock oracle feed accounts (`MarketDto.oracleFeed`) on the ER in one `getMultipleAccountsInfo` call.
+- A point `{ market, t, price }` is stored for a market only when its feed's `publishTime` advanced since the last stored point; `t = publishTime * 1000`.
+- MongoDB `prices`: unique `{ market, t }`, and a TTL index on `expiresAt` (`t` + 6 h), so points expire after 6 hours.
+- Feed read and write failures are logged (throttled) and retried on the next tick. `PRICE_SAMPLER_ENABLED=false` switches the sampler off.
+- The web price chart loads `GET /api/prices` for its largest window (1 h) on open and on every coin switch, then appends live oracle reads.
 
 ## Keeper (arena service)
 

@@ -7,6 +7,7 @@ import type { Env } from './env'
 import { HttpError } from './errors'
 import { requestFaucet } from './faucet'
 import { DEFAULT_MARKET } from './markets'
+import { listPrices } from './prices'
 import type { RealtimeHub, SocketData } from './realtime'
 import {
   arenaQuerySchema,
@@ -14,6 +15,7 @@ import {
   cheersQuerySchema,
   nonceBodySchema,
   parseInput,
+  pricesQuerySchema,
   profileBodySchema,
   roundQuerySchema,
   roundsQuerySchema,
@@ -59,6 +61,7 @@ const KNOWN_PATHS = new Set([
   '/api/trades',
   '/api/points',
   '/api/closes',
+  '/api/prices',
   '/api/settlements',
   '/api/chat',
   '/api/cheers',
@@ -154,6 +157,10 @@ async function route(ctx: HttpContext, req: Request, url: URL, server: ArenaServ
       case '/api/closes': {
         const { market, roundId } = parseInput(roundQuerySchema, query)
         return { data: await listCloses(cols, market, roundId) }
+      }
+      case '/api/prices': {
+        const { market, since } = parseInput(pricesQuerySchema, query)
+        return { data: await listPrices(cols, market, since) }
       }
       case '/api/settlements':
         return { data: await listSettlements(cols, parseInput(settlementsQuerySchema, query)) }

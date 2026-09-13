@@ -116,6 +116,7 @@ beforeAll(async () => {
   const status = {
     indexer: { enabled: false, lastSig: null, lastEventAt: null },
     keeper: { enabled: false, lastRollSig: null, lastRollAt: null },
+    prices: { enabled: false, lastSampleAt: null },
   }
   server = Bun.serve<SocketData>({
     port: 0,

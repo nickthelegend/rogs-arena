@@ -55,6 +55,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(8787),
   KEEPER_ENABLED: flag,
   INDEXER_ENABLED: flag,
+  PRICE_SAMPLER_ENABLED: flag,
   IDL_PATH: z.string().optional(),
 })
 

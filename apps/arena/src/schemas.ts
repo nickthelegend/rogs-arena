@@ -71,6 +71,8 @@ export const settlementsQuerySchema = z
       ? filters
       : { market: market ?? DEFAULT_MARKET, ...filters },
   )
+/** `since` is a ms timestamp; how far back it may reach is clamped by the query, not rejected. */
+export const pricesQuerySchema = z.object({ market: marketParam, since: intParam('since').optional() })
 export const chatQuerySchema = z.object({ limit: limitParam(50, 200) })
 export const cheersQuerySchema = z.object({ limit: limitParam(20, 100) })
 

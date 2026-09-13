@@ -2,69 +2,68 @@
 
 import { useArenaChain } from '@/components/arena-chain-provider'
 import { useSelectedMarket } from '@/hooks/use-market-selection'
-import type { PriceFeedStatus } from '@/lib/format'
-import type { LivelinePoint } from '@/lib/liveline'
+import { getPriceHistory } from '@/lib/arena-api'
+import {
+  applyOraclePrice,
+  applyPriceHistory,
+  initialPriceState,
+  priceStateFor,
+  type MarketPriceState,
+} from '@/lib/market-price'
 import { marketOracleFeed } from '@/lib/markets'
-import { normalizePricePoints } from '@/lib/utils'
+import { PRICE_HISTORY_SECS } from '@/lib/price-chart'
 import { fetchOraclePrice, subscribeOraclePrice, type OraclePrice } from '@rogs/arena-sdk'
 import { useEffect, useMemo, useState } from 'react'
 
 const STALE_REFRESH_MS = 5_000
 
-type MarketPriceState = {
-  /** The feed these values were read from; a coin switch ignores the previous feed's state. */
-  feed: string | null
-  latest: OraclePrice | null
-  points: LivelinePoint[]
-  status: PriceFeedStatus
-  error: string | null
+type MarketPriceOptions = {
+  /** Seed the points with the arena service's stored samples of the feed; only the chart draws them. */
+  history?: boolean
 }
-
-const initialState: MarketPriceState = { feed: null, latest: null, points: [], status: 'hydrating', error: null }
 
 /**
  * The selected coin's MagicBlock Pricing Oracle feed (BTC/USD, SOL/USD, ...), read from the feed account on the
- * ephemeral rollup. The chart history starts when the page opens or the coin changes; there is no stored backfill.
+ * ephemeral rollup. With `history`, opening the page or switching coins first loads the arena service's stored
+ * samples of that feed for the chart's largest window; live reads are appended either way.
  */
-export function useMarketPrice() {
+export function useMarketPrice({ history = false }: MarketPriceOptions = {}) {
   const { connections, oracleFeed } = useArenaChain()
   const { symbol, config, resolved } = useSelectedMarket()
   const feed = useMemo(() => marketOracleFeed(config, oracleFeed), [config, oracleFeed])
   const feedKey = feed.toBase58()
-  const [state, setState] = useState<MarketPriceState>(initialState)
+  const [state, setState] = useState<MarketPriceState>(initialPriceState)
 
   useEffect(() => {
     if (!resolved) return
 
     let active = true
     let lastUpdateAt = 0
-    const own = (current: MarketPriceState) => (current.feed === feedKey ? current : { ...initialState, feed: feedKey })
+    const controller = new AbortController()
 
     const accept = (price: OraclePrice) => {
       if (!active) return
       lastUpdateAt = Date.now()
-      setState((previous) => {
-        const current = own(previous)
-        if (current.latest && price.postedSlot <= current.latest.postedSlot) {
-          return current === previous && current.status === 'live' ? previous : { ...current, status: 'live', error: null }
-        }
-        return {
-          feed: feedKey,
-          latest: price,
-          points: normalizePricePoints([...current.points, { time: price.publishTime, value: price.price }]),
-          status: 'live',
-          error: null,
-        }
-      })
+      setState((previous) => applyOraclePrice(previous, feedKey, price))
     }
 
     const reject = (error: Error) => {
       if (!active) return
       setState((previous) => ({
-        ...own(previous),
+        ...priceStateFor(previous, feedKey),
         status: 'error',
         error: `MagicBlock ${symbol}/USD oracle: ${error.message}`,
       }))
+    }
+
+    if (history) {
+      // The stored samples are a head start only: without them the chart fills from live reads, with no error shown.
+      getPriceHistory(symbol, Date.now() - PRICE_HISTORY_SECS * 1000, controller.signal).then(
+        (points) => {
+          if (active && Array.isArray(points)) setState((previous) => applyPriceHistory(previous, feedKey, points))
+        },
+        () => undefined,
+      )
     }
 
     const unsubscribe = subscribeOraclePrice(connections.er, accept, reject, feed)
@@ -76,11 +75,12 @@ export function useMarketPrice() {
 
     return () => {
       active = false
+      controller.abort()
       window.clearInterval(timer)
       unsubscribe()
     }
-  }, [connections, feed, feedKey, resolved, symbol])
+  }, [connections, feed, feedKey, history, resolved, symbol])
 
-  const current = state.feed === feedKey ? state : initialState
+  const current = state.feed === feedKey ? state : initialPriceState
   return { ...current, symbol, market: config }
 }

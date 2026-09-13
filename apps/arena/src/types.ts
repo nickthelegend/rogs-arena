@@ -119,6 +119,9 @@ export type MarketDto = {
   round: RoundDto | null
 }
 
+/** A stored MagicBlock oracle price: `t` is the feed's publish time in ms, `price` is USD. */
+export type PricePointDto = { t: number; price: number }
+
 export type HealthMarketDto = {
   market: string
   available: boolean
@@ -131,4 +134,5 @@ export type HealthMarketDto = {
 export type ServiceStatus = {
   indexer: { enabled: boolean; lastSig: string | null; lastEventAt: number | null }
   keeper: { enabled: boolean; lastRollSig: string | null; lastRollAt: number | null }
+  prices: { enabled: boolean; lastSampleAt: number | null }
 }
