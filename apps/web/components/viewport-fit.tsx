@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 
 /** The arena grid (400px | center | 400px) is designed for this width; the island's trading zone needs it. */
 export const DESIGN_WIDTH = 1440
+const DESIGN_MIN_HEIGHT = 720
+const DESIGN_MAX_HEIGHT = 1000
 
 type Fit = { zoom: number; width: number; height: number } | null
 
@@ -12,7 +14,9 @@ function measure(): Fit {
   const viewportWidth = window.innerWidth
   if (viewportWidth >= DESIGN_WIDTH) return null
   const zoom = viewportWidth / DESIGN_WIDTH
-  return { zoom, width: DESIGN_WIDTH, height: Math.round(window.innerHeight / zoom) }
+  // Keep the desktop proportions: a tall portrait screen would otherwise stretch every panel vertically.
+  const height = Math.round(Math.min(Math.max(window.innerHeight / zoom, DESIGN_MIN_HEIGHT), DESIGN_MAX_HEIGHT))
+  return { zoom, width: DESIGN_WIDTH, height }
 }
 
 /**

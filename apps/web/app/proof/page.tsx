@@ -162,7 +162,9 @@ export default function ProofPage() {
               <Row label="Feed"><Link href={addressUrl(oracleFeed.toBase58())}>{short(oracleFeed.toBase58())}</Link></Row>
               <Row label="BTC/USD">${proof.oracle.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Row>
               <Row label="Published">{time(proof.oracle.publishTime)} ({Math.max(0, now - proof.oracle.publishTime)}s ago)</Row>
-              <Row label="Open round strike">${(Number(proof.er.current.strikePrice) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Row>
+              <Row label="Open round strike">
+                ${(Number(proof.er.current.strikePrice) / 1e8).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Row>
             </Card>
 
             <Card title="Verifiable randomness" subtitle="Cheers winners are picked by MagicBlock VRF in a callback transaction.">
