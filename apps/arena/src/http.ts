@@ -151,8 +151,10 @@ async function route(ctx: HttpContext, req: Request, url: URL, server: ArenaServ
       } catch {
         throw new HttpError(400, 'Invalid wallet address')
       }
-      const user = await getUser(cols, parseInput(walletSchema, raw))
-      if (!user) throw new HttpError(404, 'Profile not found')
+      const wallet = parseInput(walletSchema, raw)
+      const user = await getUser(cols, wallet)
+      // A wallet that never saved a name is a normal first visit, not a missing resource.
+      if (!user) return { data: { wallet, displayName: null, createdAt: 0, updatedAt: 0 } }
       return { data: toProfile(user) }
     }
   }

@@ -126,7 +126,7 @@ type ArenaSnapshot = {
 | GET | `/api/settlements?roundId=&owner=` | – | `SettlementDto[]` (either filter optional) |
 | GET | `/api/chat?limit=50` | – | `ChatDto[]` ascending |
 | GET | `/api/cheers?limit=20` | – | `CheersDto[]` newest first |
-| GET | `/api/profile/:wallet` | – | `ProfileDto` or 404 |
+| GET | `/api/profile/:wallet` | – | `ProfileDto`; a wallet that never saved a name gets `displayName: null`, `createdAt: 0`, `updatedAt: 0` (200, so first visits log no failed request) |
 | POST | `/api/profile` | Bearer | body `{ displayName }` (trimmed, 2–24 chars, letters/digits/space/_-.) → `ProfileDto` |
 | POST | `/api/auth/nonce` | – | see Auth |
 | POST | `/api/auth/verify` | – | see Auth |
