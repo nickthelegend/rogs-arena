@@ -112,3 +112,33 @@ Run at 2026-09-13T04:20:37.635Z, round 62. P1 `DLp625rAtS8ZYMaAwPPgUE1YVoSAqBeW4
 | request_cheers sent by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [2psQ2rpP…](https://solscan.io/tx/2psQ2rpPcPA9enyh397e4bBBb71kFnR8QdJB5BQDTCDC2PkRKzipesLXFPRtCzaHr4pNHuGYkunreRdgBzieQNZL?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | VRF callback paid recent traders | PASS | recipients 10 (incl. P1), 1 USD each, randomness 512b107f8c0b3381… | [44rT1Gn7…](https://solscan.io/tx/44rT1Gn7d8kCp8AyF5nfKyQs8PGX89gK9YNXHwyoVi8bfyD3Ks68nSmSzXKx4QDA5U2nY4cu1Pj45gwUecairZx2?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | indexer stored the CheersPaid row | PASS | /api/cheers has 44rT1Gn7d8… | — |
+
+## Player undelegate and re-delegate (commit_and_undelegate)
+
+Run at 2026-09-13T05:32:33.044Z. Wallet `5me19h1tzAfnsKFUq7sfREfL6UU5Z6J8tc4eKGditrm7`, Player `CRKZgckMfEVxQ5e5Tzgw1EKx3LUzRYXnRruhHpMzZndP`.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| fund wallet | PASS | 5me19h1tzAfnsKFUq7sfREfL6UU5Z6J8tc4eKGditrm7 | [5RELHGcj…](https://explorer.solana.com/tx/5RELHGcjB16vkBB5Whp4arZuQT2wRD8JseHDwJwqgjJ1ehcoyNZdVpLyWEZidpwmETPLxam4S4EDuB1AREkkE9YH?cluster=devnet) |
+| init + delegate Player | PASS | CRKZgckMfEVxQ5e5Tzgw1EKx3LUzRYXnRruhHpMzZndP | [2zGG5PTq…](https://explorer.solana.com/tx/2zGG5PTqV3XAgjySacoUWY2aowALa6ngpYE9zibkwXJncVnjvzGvmgbsqUnZ7wfoYXU6jFFeL6Svq3QfPQHvAG2s?cluster=devnet) |
+| claim_chips on the ER | PASS | ER balance 250.000000 USD | [4w9w2Lir…](https://solscan.io/tx/4w9w2LirauPdYdiRNNF2ceMoB3k7KqvKzh3ytdN6xeb4Ak2iCn38mNV2ph4fhhwdhgr3jSHVeC27Spk1BEcuvqjN?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| router reports delegated | PASS | {"isDelegated":true,"fqdn":"https://devnet-as.magicblock.app/","delegationRecord":{"authority":"MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57","owner":"J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q","delegationSlot":497561311,"lamports":2656840}} | — |
+| undelegate_player (commit_and_undelegate) | PASS | scheduled from the ER | [32DuaHNn…](https://solscan.io/tx/32DuaHNnWgyEgEP6tiDct5vohiBvVT3Xoq5zWeEdo2vk97yDsspfT194jDa3d1p8WkADbzfMDvv5aGaqZcmMPnk3?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| Player back under the program on Solana with ER state | PASS | owner J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q, base balance 250.000000 USD | — |
+| router reports undelegated | PASS | {"isDelegated":false} | — |
+| re-delegate Player, balance intact on the ER | PASS | ER balance 250.000000 USD | [5KaCaJyo…](https://explorer.solana.com/tx/5KaCaJyoQqbGbmrKcY6WgxzoGeEwD45D98V5U3uPurogerm3zbXv3xVNPaykreLsHeMCMXofkPchd1fnoGqnk2CU?cluster=devnet) |
+
+## Keeper-driven Cheers via MagicBlock VRF (KPR-02 / MG-07, XRP, Fair Cheers v2)
+
+Run at 2026-09-13T05:35:07.179Z, round 4398046511113. P1 `7NRuYymx21L11CWktn1A2adBkBx85iiWmiyfqb5rWup4`, P2 `8bC9Rw8zGrXEZV8yS7wxghcHWkSo8nMeyLsG974pqwAE`.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| P2 buys YES $5 with the Cheers card | PASS | XRP round 4398046511113 | [4pjeKUUD…](https://solscan.io/tx/4pjeKUUD6po7XqyzLjomcsBCH5MHw3mCD8TMxMcYgK1fPNrnxUcJ6DCAmobyYEDDunYAs7jRoEXgKNSrrp9FuvBH?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 buys YES $90 (moves the AMM) | PASS | 148238266 shares | [43SLgJbr…](https://solscan.io/tx/43SLgJbrwRJgifRYLMv94CKU3BsvsX1FDhAoFTQHLXVfvdkxpeVDWECFaq9ygLRs6rcoWYrv8EF8xt32og3BWR3D?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P2 sells into the move at a profit | PASS | out 6.572087 USD vs cost 5 USD | [2Qg2apf6…](https://solscan.io/tx/2Qg2apf6FeexCREAPe6cnB3t8paKWYWwgD6rV3sF55x4mcKw8ncPdDvXVbhLGqTzf1YVSP3MC9KEPhrj2Hj2dDgB?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 received Cheers after resolution | PASS | cheers_received 1 USD | — |
+| P2 settled by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [5A2hKpXo…](https://solscan.io/tx/5A2hKpXovdK5AVZ6ccsXCpU2u9atHvNzQQRMwYhLwSKqpRHTBp5Xry91QLFkT7jsDoyUutgDKTAx1ihHTg2U8rNt?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| request_cheers sent by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [WoLerxar…](https://solscan.io/tx/WoLerxar1F1BMWr5tcMT1JwtujjUSS5H4yR12WTb9zZkzA5HtebhbsruyYbEPUvbdiQkjywjodbjDjkFbvxywtC?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| VRF callback paid recent traders | PASS | recipients 1 (incl. P1), 1 USD each, randomness 5daee9eb21aea83f… | [5utGZhqQ…](https://solscan.io/tx/5utGZhqQRGE6QXEb8Bpxj4KH81uqQ3NszNC4MgqMwG7qmD8jQMLiWviDD595iu4jPHZyw1Bdgcy56JB9Gg3uJjWj?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| indexer stored the CheersPaid row | PASS | /api/cheers has 5utGZhqQRG… | — |
