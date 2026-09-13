@@ -155,3 +155,14 @@ Findings and fixes are appended here per run: item ID, observed result, root cau
 | UI-25 (390/1024) | At zoomed widths Chrome logged 2 net::ERR_ABORTED requests (an ER POST and /api/rounds) during load; there were no visible errors | `ViewportFit` rendered children bare on the first client render, then wrapped them after measuring, so the whole app remounted and effects aborted their first requests | The wrapper element is always rendered (display: contents when not zoomed), so the tree never remounts | PASS on 58ad4b7: the 390x844 run shows failed: [] and consoleErrors: [] |
 | WS-03 re-run | During the chat check the viewer tab logged "WebSocket connection … failed: WebSocket is closed before the connection is established." | A sign-in in another tab (shared localStorage) or a quick unload made `setAuth`/`shutdown` call close() on a socket still CONNECTING | `closeSocket` (lib/socket-close.ts) detaches handlers and closes a CONNECTING socket only once it opens; 3 unit tests | PASS on 58ad4b7: the WS-03 re-run shows errors: [] |
 | UI-23 re-run | The first two outage runs did not take the service down (URL blocking and request interception let data through), so they proved nothing | Browser-level blocking was bypassed | Real outage instead: a second Chrome with --host-resolver-rules maps the service host to 127.0.0.1:9 (connection refused) | PASS on 58ad4b7 (see UI-23) |
+
+### Run 2 — full top-to-bottom re-run (2026-09-13 04:10 UTC onward)
+
+| Scope | Result | Evidence |
+|---|---|---|
+| CH-24 Rust unit tests | PASS | cargo test -p rogs-arena --lib: 22 passed, 0 failed |
+| CH-25 SDK tests | PASS | bun test: 13 pass, 0 fail |
+| Service unit tests | PASS after fix | First run 40 pass / 2 fail: the beforeAll hook connecting to Atlas timed out at bun's 5 s default under load, then afterAll crashed on an undefined db. Fixed in faucet.live, auth and limits tests: 30 s hook timeout and a guarded drop. Two isolated re-runs: 46 pass, 0 fail |
+| Web tsc + unit tests | PASS | tsc 0 errors; 226 pass, 0 fail |
+| API-07..API-12 (verify-live-api.ts) | PASS | all 17 checks, faucet tx 3CgJbMAS…, probe documents removed |
+| WS-01, WS-03 (HTTP half), WS-04 (verify-live-ws.ts) | PASS | round 61 snapshot equals /api/arena; all error frames; nothing persisted from errors |

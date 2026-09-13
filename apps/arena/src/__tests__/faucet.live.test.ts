@@ -9,13 +9,16 @@ import { openTestDb, type TestDatabase } from './helpers'
 let db: TestDatabase
 const chain = new ArenaChain(env)
 
+// Connecting to Atlas can take longer than bun's 5 s default hook timeout on a busy machine or network.
+const ATLAS_CONNECT_TIMEOUT_MS = 30_000
+
 beforeAll(async () => {
   db = await openTestDb()
-})
+}, ATLAS_CONNECT_TIMEOUT_MS)
 
 afterAll(async () => {
-  await db.drop()
-})
+  await db?.drop()
+}, ATLAS_CONNECT_TIMEOUT_MS)
 
 describe('faucet on devnet (live)', () => {
   test('sends 0.02 SOL to a fresh keypair, then skips it as funded', async () => {

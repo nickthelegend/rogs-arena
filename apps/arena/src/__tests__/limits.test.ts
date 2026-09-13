@@ -14,13 +14,14 @@ import { openTestDb, type TestDatabase } from './helpers'
 
 let db: TestDatabase
 
+// Connecting to Atlas can take longer than bun’s 5 s default hook timeout on a busy machine or network.
 beforeAll(async () => {
   db = await openTestDb()
-})
+}, 30_000)
 
 afterAll(async () => {
-  await db.drop()
-})
+  await db?.drop()
+}, 30_000)
 
 const newWallet = () => Keypair.generate().publicKey.toBase58()
 
