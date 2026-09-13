@@ -32,9 +32,9 @@ An item counts only when it has been **verified against the real system** (devne
 | 22 | Web | Trade a non-BTC market from the UI | DONE | MK-10: guest SOL buy from the island, ER tx writes the SOL arena, keeper settled it |
 | 23 | Web | Proof page for nine markets | DONE | MK-11 |
 | 24 | Web | ROGS branding, frog mascot, icon | DONE | BR-01, BR-02 |
-| 25 | Web | Core flows regression on the multi-market build (guest, buy/sell, TP/SL, abilities, chat, leaderboard, history) | IN PROGRESS | Found and fixed a real bug: returning guests stalled in setup (stale player read). Passing so far: fresh-guest join, SOL buy + keeper settlement, chat (Claude in Chrome and headless), outage resilience, selector, proof, badges. Re-running verify-fixes, flow, ws-browser after the fix |
+| 25 | Web | Core flows regression on the multi-market build (guest, buy/sell, TP/SL, abilities, chat, leaderboard, history) | DONE | Fix build 566d698, headless Chrome, returning guests 0 and 1. verify-fixes: guest ready, UI-10, UI-12 (x2), held position, UI-15 keeper settlement message, UI-16 frozen board, UI-01. flow: guest setup, UI-13 (x3), UI-22, UI-14. All PASS 07:06–07:20 UTC. Also verified: fresh-guest join, SOL buy + keeper settle, chat, WS-05/06, outage resilience, selector, proof, badges. Found and fixed: returning-guest setup stall |
 | 26 | Web | Lint clean | DONE | `bunx eslint .` 0 problems, tsc clean, 261 tests, build with no warnings |
-| 27 | Web | Zero console and network errors on the new build | NOT VERIFIED | — |
+| 27 | Web | Zero console and network errors on the new build | DONE | UI-01 0 console errors and 0 failed requests across verify-fixes; markets-check consoleErrors [] and wsErrors []; Claude in Chrome 0 console messages on local production and on the live Vercel site; ws-chat errors [] |
 | 28 | Web | Price chart labels readable | DONE | Plot starts below the label; final-1440-btc-top.png / final-1440-doge-top.png reviewed |
 | 29 | Web | Usable mobile layout | DONE | Stacked single column below 768 px; headless 390 px: no overflow, bottom-sheet selector, SOL switch, 0 errors |
 | 30 | Web | Badge Magic Action and commit receipts reachable in the UI | DONE | MG-09: two saves from the badges panel, Solana txs ran RecordBadges, record tracks the new trade |
@@ -60,3 +60,11 @@ Web scores zero because it changed substantially (nine markets, selector, brandi
 - **06:24 UTC — 30 of 33 = 91%.** Items #21–#24 and #26–#30 were verified in the browser on the local production build and on-chain. Left: #25 (core-flow regression sweep), #27 (zero console and network errors across every flow), #31 (Vercel).
 - **06:58 UTC — still 30 of 33.** Vercel is no longer blocked: a fresh project built READY. The regression sweep found a returning-guest setup bug, now fixed and being re-verified live.
 - **07:03 UTC — 31 of 33 = 94%.** Item #31: the fresh Vercel project is live with the returning-guest fix and verified in the browser. Left: #25 and #27, which wait on the verify-fixes, flow and ws-browser re-runs against the fix build.
+- **07:21 UTC — 33 of 33 = 100% of the checklist.** The core-flow regression and zero-errors items are verified on the fix build. Still being added for the recording: coin logos, demo trading bots and chat, and deployment of the price-history release plus the new loading screen.
+- **08:41 UTC — recording readiness on localhost, still 33 of 33.** Nothing was deployed; the owner asked to finish on localhost first. Found and fixed:
+  - Coin logos next to every price stayed blank in background tabs (lazy loading).
+  - The traders count ignored the demo bots (no presence heartbeat).
+  - The Save to Solana row overlapped the traders count at every desktop size (`h-full` list).
+  - Re-verified on the rebuilt production build: guest buy, stop loss and keeper settlement from the UI, each confirmed on the MagicBlock ER; chat send and live chat; coin switch across 9 logos; Save to Solana Magic Action confirmed on Solana; flow and verify-fixes suites all PASS; 0 console errors.
+  - Five demo bots traded real ER transactions throughout: 236 buys, 58 exits, 45 settles, 0 failures.
+  - Details: TEST-PLAN.md Run 4.

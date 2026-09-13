@@ -115,7 +115,8 @@ export default function SectionProgress() {
 
   return (
     <section className="section-panel flex-none select-none">
-      <ul className="grid h-full w-full grid-rows-4 gap-2">
+      {/* Content height, not h-full: a full-height list pushed the Save to Solana row over the status bar. */}
+      <ul className="grid w-full grid-rows-4 gap-2">
         {tracks.map((track) => (
           <li className="flex items-center gap-3 text-white" key={track.id}>
             <div className="size-12 shrink-0 rounded-lg bg-[#C8C8C8] overflow-hidden">
