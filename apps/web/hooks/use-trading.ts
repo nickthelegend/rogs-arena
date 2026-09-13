@@ -5,6 +5,7 @@ import { useCurrentMarket } from '@/hooks/use-current-market'
 import { usePlayer } from '@/hooks/use-player'
 import { useTradeSetup } from '@/hooks/use-trade-setup'
 import { abilityCardById } from '@/lib/ability'
+import { getSettlements } from '@/lib/arena-api'
 import { errorMessage } from '@/lib/error'
 import type { ProgressHeartRate } from '@/lib/progress'
 import { nowSeconds, type ArenaSession } from '@/lib/session-key'
@@ -25,6 +26,7 @@ import {
   roundPosition,
   sellablePositions,
   sellQuote,
+  settlementSummaryFromDto,
   tradableForOutcome,
   tradeBlockedReason,
   withAbilityMessage,
@@ -99,6 +101,43 @@ function useTradingController() {
   const positionAbility =
     position && (position.yesShares > 0n || position.noShares > 0n) && position.proceeds === 0n ? position.ability : null
   const exitQuotes = exitQuotesFor(market, position)
+
+  // The keeper settles resolved rounds by itself. When a position leaves the player account, report what it
+  // paid from the indexed PositionSettled rows, so the result is visible without pressing Claim.
+  const activeRoundsRef = useRef<{ owner: string; rounds: number[] } | null>(null)
+  const reportedRoundsRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (!player || !owner) return
+    const rounds = player.positions.filter((item) => item.active).map((item) => item.roundId)
+    const previous = activeRoundsRef.current
+    activeRoundsRef.current = { owner, rounds }
+    if (!previous || previous.owner !== owner) return
+    const settled = previous.rounds.filter(
+      (roundId) => !rounds.includes(roundId) && !reportedRoundsRef.current.has(`${owner}:${roundId}`),
+    )
+    if (settled.length === 0) return
+    for (const roundId of settled) reportedRoundsRef.current.add(`${owner}:${roundId}`)
+    void (async () => {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          const rows = (await Promise.all(settled.map((roundId) => getSettlements({ roundId, owner })))).flat()
+          if (rows.length >= settled.length) {
+            const latest = rows.reduce((left, right) => (right.t > left.t ? right : left))
+            setStatus({
+              tone: 'success',
+              message: formatSettlementMessage(rows.map(settlementSummaryFromDto)),
+              signature: latest.sig,
+              explorerUrl: explorerTxUrl(latest.sig, 'er'),
+            })
+            return
+          }
+        } catch {
+          // The indexer can trail the keeper's transaction by a moment; the next attempt retries.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_500))
+      }
+    })()
+  }, [owner, player])
 
   useEffect(() => {
     if (playerError) setStatus({ tone: 'error', message: playerError })
@@ -291,6 +330,10 @@ function useTradingController() {
       setStatus({ tone: 'neutral', message: 'Settling resolved rounds on the MagicBlock ER...' })
 
       const { ownerKey, signer } = requireSession()
+      // This claim reports its own settlement; keep the keeper watcher from announcing the same rounds again.
+      for (const item of player?.positions ?? []) {
+        if (item.active && item.roundId !== market?.roundId) reportedRoundsRef.current.add(`${ownerKey.toBase58()}:${item.roundId}`)
+      }
       const instruction = await instructions.settlePlayer(ownerKey)
       const sent = await sendErTransaction(connections.er, [instruction], signer)
 

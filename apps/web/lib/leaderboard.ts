@@ -393,3 +393,15 @@ export function advanceLeaderboardHold(
     false,
   )
 }
+
+/**
+ * A frozen board belongs to a round that has ended. Once the crank resolves it, every open share is
+ * worth $1 if its outcome won and $0 if it lost, so show that final value instead of the last mark.
+ */
+export function resolveHeldItems(items: LeaderboardItem[], outcome: 'YES' | 'NO'): LeaderboardItem[] {
+  return items.map((item) => {
+    if (item.status !== 'open') return item
+    const value = item.outcome === outcome ? 1 : 0
+    return { ...item, profit: item.shares * (value - item.avgPrice) }
+  })
+}

@@ -279,3 +279,26 @@ export function exitQuotesFor(
 export function withAbilityMessage(message: string, note?: string | null) {
   return note ? `${message} ${note}` : message
 }
+
+const signedUsdToChips = (usd: number) => BigInt(Math.round(usd * 1_000_000))
+
+/** An indexed PositionSettled row (USD numbers from the arena service) in the on-chain summary shape. */
+export function settlementSummaryFromDto(dto: {
+  roundId: number
+  payout: number
+  profit: number
+  ability: number
+  bonus: number
+  calm: boolean
+  cheers: boolean
+}): SettlementSummary {
+  return {
+    roundId: dto.roundId,
+    payout: signedUsdToChips(dto.payout),
+    profit: signedUsdToChips(dto.profit),
+    ability: dto.ability,
+    bonus: signedUsdToChips(dto.bonus),
+    calm: dto.calm,
+    cheers: dto.cheers,
+  }
+}
