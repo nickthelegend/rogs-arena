@@ -1,60 +1,56 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  PROGRESS_STORAGE_KEY,
-  STEAL_HEART_BPM_LIMIT,
-  applyProgressEvent,
   emptyProgressState,
   isCalmHeartRate,
-  parseProgress,
-  progressDayKey,
-  progressFromStorage,
+  progressFromPlayer,
   progressHeartRateBpm,
   progressTracks,
-  recordProgressEvent,
+  STEAL_HEART_BPM_LIMIT,
+  utcDayIndex,
+  utcDayKey,
+  type PlayerProgressStats,
   type ProgressState,
 } from '../progress'
 
-function memoryStorage(initial: Record<string, string> = {}) {
-  const memory = new Map(Object.entries(initial))
-  return {
-    getItem: (key: string) => memory.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      memory.set(key, value)
-    },
-  }
-}
+const noonUtc = Date.parse('2026-09-13T12:00:00Z')
+const today = utcDayIndex(noonUtc)
 
-function state(overrides: Partial<ProgressState> = {}): ProgressState {
+function stats(overrides: Partial<PlayerProgressStats> = {}): PlayerProgressStats {
   return {
-    trades: 0,
-    streak: 0,
-    calmWins: 0,
-    dayKey: '2026-09-10',
-    dayTrades: 0,
+    tradesTotal: 12,
+    winStreak: 3,
+    calmWins: 2,
+    dayIndex: today,
+    dayTrades: 4,
     ...overrides,
   }
 }
 
-const noon = Date.parse('2026-09-10T12:00:00')
-const nextNoon = Date.parse('2026-09-11T12:00:00')
+describe('utc days', () => {
+  test('match the program day number and render as an ISO date', () => {
+    expect(today).toBe(Math.floor(noonUtc / 1000 / 86_400))
+    expect(utcDayKey(today)).toBe('2026-09-13')
+    expect(utcDayKey(0)).toBe('')
+  })
+})
 
-describe('parseProgress', () => {
-  test('reads whole numbers and drops invalid payloads', () => {
-    expect(parseProgress({ trades: 12.9, streak: 3, calmWins: 8, dayKey: '2026-09-10', dayTrades: 4 })).toEqual({
+describe('progressFromPlayer', () => {
+  test('reads trades, streak, calm wins, and today trades from the Player account', () => {
+    expect(progressFromPlayer(stats(), noonUtc)).toEqual({
       trades: 12,
       streak: 3,
-      calmWins: 8,
-      dayKey: '2026-09-10',
+      calmWins: 2,
+      dayKey: '2026-09-13',
       dayTrades: 4,
     })
-    expect(parseProgress(null)).toEqual(emptyProgressState())
-    expect(parseProgress({ trades: -2, streak: '3', dayTrades: Number.NaN })).toEqual({
-      trades: 0,
-      streak: 0,
-      calmWins: 0,
-      dayKey: '',
-      dayTrades: 0,
-    })
+  })
+
+  test('reads a day counter from an earlier UTC day as zero', () => {
+    expect(progressFromPlayer(stats({ dayIndex: today - 1, dayTrades: 9 }), noonUtc).dayTrades).toBe(0)
+  })
+
+  test('shows empty progress before the Player account exists', () => {
+    expect(progressFromPlayer(null, noonUtc)).toEqual(emptyProgressState())
   })
 })
 
@@ -68,7 +64,7 @@ describe('progressHeartRateBpm', () => {
 })
 
 describe('isCalmHeartRate', () => {
-  test('counts only a live reading strictly under 120', () => {
+  test('counts only a reading strictly under 120', () => {
     expect(isCalmHeartRate(119)).toBe(true)
     expect(isCalmHeartRate(STEAL_HEART_BPM_LIMIT)).toBe(false)
     expect(isCalmHeartRate(0)).toBe(false)
@@ -76,95 +72,15 @@ describe('isCalmHeartRate', () => {
   })
 })
 
-describe('applyProgressEvent', () => {
-  test('counts a placed trade toward Trade Master and Day Trader', () => {
-    const next = applyProgressEvent(state(), { type: 'placed' }, noon)
-    expect(next.trades).toBe(1)
-    expect(next.dayTrades).toBe(1)
-    expect(next.dayKey).toBe(progressDayKey(noon))
-  })
-
-  test('resets the daily count after midnight', () => {
-    const sameDay = applyProgressEvent(state({ trades: 4, dayTrades: 4 }), { type: 'placed' }, noon)
-    const nextDay = applyProgressEvent(sameDay, { type: 'placed' }, nextNoon)
-    expect(sameDay.dayTrades).toBe(5)
-    expect(nextDay.trades).toBe(6)
-    expect(nextDay.dayTrades).toBe(1)
-    expect(nextDay.dayKey).toBe(progressDayKey(nextNoon))
-  })
-
-  test('climbs a win streak and resets it on a loss', () => {
-    let next = state()
-    for (let i = 0; i < 5; i++) {
-      next = applyProgressEvent(next, { type: 'result', won: true }, noon)
-    }
-    expect(next.streak).toBe(5)
-
-    next = applyProgressEvent(next, { type: 'result', won: false }, noon)
-    expect(next.streak).toBe(0)
-  })
-
-  test('counts Steal Heart only on a win with heart rate under 120', () => {
-    const calmWin = applyProgressEvent(state(), { type: 'result', won: true, heartRateBpm: 119 }, noon)
-    const hotWin = applyProgressEvent(calmWin, { type: 'result', won: true, heartRateBpm: 120 }, noon)
-    const disconnected = applyProgressEvent(hotWin, { type: 'result', won: true, heartRateBpm: null }, noon)
-    const loss = applyProgressEvent(disconnected, { type: 'result', won: false, heartRateBpm: 80 }, noon)
-
-    expect(calmWin.calmWins).toBe(1)
-    expect(hotWin.calmWins).toBe(1)
-    expect(disconnected.calmWins).toBe(1)
-    expect(loss.calmWins).toBe(1)
-    expect(loss.streak).toBe(0)
-  })
-})
-
 describe('progressTracks', () => {
   test('caps each track at its goal', () => {
-    const tracks = progressTracks(
-      state({
-        trades: 140,
-        streak: 9,
-        calmWins: 70,
-        dayTrades: 21,
-      }),
-    )
+    const state: ProgressState = { trades: 140, streak: 9, calmWins: 70, dayKey: '2026-09-13', dayTrades: 21 }
 
-    expect(tracks.map((track) => [track.id, track.value, track.max])).toEqual([
+    expect(progressTracks(state).map((track) => [track.id, track.value, track.max])).toEqual([
       ['tradeMaster', 100, 100],
       ['streakClimber', 5, 5],
       ['stealHeart', 70, 70],
       ['dayTrader', 20, 20],
     ])
-  })
-})
-
-describe('progress storage', () => {
-  test('persists a placed trade and a calm win', () => {
-    const storage = memoryStorage()
-
-    recordProgressEvent({ type: 'placed' }, storage, noon)
-    recordProgressEvent({ type: 'result', won: true, heartRateBpm: 110 }, storage, noon)
-
-    const stored = JSON.parse(storage.getItem(PROGRESS_STORAGE_KEY) ?? '{}') as ProgressState
-    expect(stored).toEqual({
-      trades: 1,
-      streak: 1,
-      calmWins: 1,
-      dayKey: progressDayKey(noon),
-      dayTrades: 1,
-    })
-    expect(progressFromStorage(storage, noon)).toEqual(stored)
-  })
-
-  test('rolls a stale day when reading without writing a new trade', () => {
-    const storage = memoryStorage({
-      [PROGRESS_STORAGE_KEY]: JSON.stringify(state({ trades: 8, dayTrades: 8 })),
-    })
-
-    expect(progressFromStorage(storage, nextNoon)).toMatchObject({
-      trades: 8,
-      dayTrades: 0,
-      dayKey: progressDayKey(nextNoon),
-    })
   })
 })

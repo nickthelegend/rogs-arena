@@ -1,12 +1,13 @@
 import type { CandlePoint, LivelinePoint } from '@/lib/liveline'
 import { BTC_PRICE_TICKS } from '@/lib/btc'
-import type { PricePoint, LivePrice } from '@somnia-chain/markets-sdk'
+type PricePoint = { blockTimestamp: number; price: number }
+type LivePrice = { blockTimestamp: number; price: number }
 
 export {
   formatAddress,
   formatChange,
   formatChartTime,
-  formatGmt7Time,
+  formatLocalTime,
   formatPercent,
   formatUpdateTime,
   formatUsd,
@@ -15,9 +16,14 @@ export {
 } from '@/lib/format'
 
 export const DISPLAY_NAME_MAX_LENGTH = 15
+/** The arena service requires 2-24 characters of letters, digits, spaces, _ - . (apps/arena/src/schemas.ts). */
+export const DISPLAY_NAME_MIN_LENGTH = 2
 
 export function sanitizeName(name: string) {
-  return name.toLowerCase().replace(/\s/g, '').slice(0, DISPLAY_NAME_MAX_LENGTH)
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_.-]/gu, '')
+    .slice(0, DISPLAY_NAME_MAX_LENGTH)
 }
 
 export function normalizePoints(points: LivelinePoint[]) {

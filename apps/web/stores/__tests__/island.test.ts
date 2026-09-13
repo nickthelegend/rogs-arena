@@ -19,7 +19,7 @@ describe('useIslandStore', () => {
     useIslandStore.getState().setZone('trading-zone')
     expect(useIslandStore.getState().stage).toBe('unconnected')
 
-    useIslandStore.getState().syncFromSetup({ authenticated: true, step: 'creating_wallet' })
+    useIslandStore.getState().syncFromSetup({ authenticated: true, step: 'delegating_player' })
     expect(useIslandStore.getState().stage).toBe('preparing')
   })
 
@@ -27,7 +27,7 @@ describe('useIslandStore', () => {
     useIslandStore.getState().syncFromSetup({
       authenticated: true,
       step: 'ready',
-      address: '0x1111111111111111111111111111111111111111',
+      address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
       settled: true,
     })
     expect(useIslandStore.getState().stage).toBe('information')

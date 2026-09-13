@@ -13,7 +13,6 @@ import { Liveline, type LivelinePoint, type LivelineSeries, type WindowOption } 
 import { toTradeMarkers } from '@/lib/market-trades'
 import { NO_COLOR, YES_COLOR } from '@/lib/outcome'
 import { ensureDrawablePoints, holdLastValue, normalizePoints } from '@/lib/utils'
-import { isBinaryMarket } from '@somnia-chain/markets-sdk'
 import { useEffect, useMemo, useState } from 'react'
 
 const currentWindows: WindowOption[] = [
@@ -40,9 +39,9 @@ function toNoPoints(yesPoints: LivelinePoint[], nowSeconds: number, fallbackYes?
 }
 
 function MarketValueFeed() {
-  const { market: selectedMarket, isLoading: isLoadingMarkets } = useCurrentMarket()
+  const { market: selectedMarket, isLoading: isLoadingMarkets, error: marketError } = useCurrentMarket()
   const [nowSeconds, setNowSeconds] = useState(0)
-  const binaryMarket = selectedMarket && isBinaryMarket(selectedMarket.info) ? selectedMarket.info : null
+  const binaryMarket = selectedMarket ? selectedMarket.info : null
   const marketIds = useMemo(() => currentMarketIds(selectedMarket), [selectedMarket])
   const { points, status } = useMarketTimeseries(marketIds)
   const { trades } = useMarketTrades(marketIds)
@@ -58,7 +57,8 @@ function MarketValueFeed() {
   }, [])
 
   const latest = points.at(-1)
-  const fallbackYes = latest == null ? undefined : latest.yes
+  // Before the first indexed sample, the live YES probability comes straight from the on-chain pools.
+  const fallbackYes = latest == null ? selectedMarket?.yesPrice : latest.yes
   const tradingStart = binaryMarket ? Number(binaryMarket.tradingStart) : Number.NaN
   const chartOrigin = Number.isFinite(tradingStart) ? tradingStart : undefined
   const yesPoints = binaryMarket ? toYesPoints(points, nowSeconds, fallbackYes, chartOrigin) : []
@@ -124,7 +124,7 @@ function MarketValueFeed() {
                   : 'Waiting for live market data...'
                 : isLoadingMarkets
                   ? 'Loading live market...'
-                  : 'No live 5m market yet.'
+                  : (marketError ?? 'No live 5m market yet.')
             }
             referenceLine={{ value: 0.5, label: '50%' }}
             yDomain={[-0.05, 1.08]}

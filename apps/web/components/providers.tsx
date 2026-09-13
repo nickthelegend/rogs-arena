@@ -1,87 +1,58 @@
 'use client'
 
+import '@/lib/buffer-polyfill'
+import '@solana/wallet-adapter-react-ui/styles.css'
+import { ArenaChainProvider } from '@/components/arena-chain-provider'
+import { ArenaRealtimeProvider } from '@/components/arena-realtime-provider'
+import { ArenaWalletProvider } from '@/components/arena-wallet-provider'
 import { PreloadGate } from '@/components/preload-gate'
 import { env } from '@/env'
 import { CurrentMarketProvider } from '@/hooks/use-current-market'
+import { PlayerProvider } from '@/hooks/use-player'
+import { TradeSetupProvider } from '@/hooks/use-trade-setup'
 import { useTraderPresence } from '@/hooks/use-traders'
-import { config as wagmiConfig } from '@/lib/wagmi'
-import {
-  PrivyProvider,
-  usePrivy,
-  useSigners,
-  useUser,
-  type LinkedAccountWithMetadata,
-  type WalletWithMetadata,
-} from '@privy-io/react-auth'
-import { WagmiProvider } from '@privy-io/wagmi'
+import { TradingProvider } from '@/hooks/use-trading'
+import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useState } from 'react'
 
-const queryClient = new QueryClient()
-
-function isServerSignableWallet(account: LinkedAccountWithMetadata): account is WalletWithMetadata {
-  return (
-    account.type === 'wallet' &&
-    account.chainType === 'ethereum' &&
-    (account.walletClientType === 'privy' || account.walletClientType === 'privy-v2')
-  )
-}
+// Phantom, Solflare and Backpack register through the Wallet Standard, so no adapters are listed here.
+const standardWalletsOnly: [] = []
+const connectionConfig = { commitment: 'confirmed' as const }
 
 function TraderPresence() {
   useTraderPresence()
   return null
 }
 
-function WalletSessionSignerManager() {
-  const { ready, authenticated, user } = usePrivy()
-  const { refreshUser } = useUser()
-  const { addSigners } = useSigners()
-  const attemptedWallets = useRef(new Set<string>())
-
-  useEffect(() => {
-    if (!ready || !authenticated || !user) return
-
-    const wallet = user.linkedAccounts.find(isServerSignableWallet)
-
-    if (!wallet || wallet.id || attemptedWallets.current.has(wallet.address)) return
-
-    attemptedWallets.current.add(wallet.address)
-
-    addSigners({
-      address: wallet.address,
-      signers: [{ signerId: env.NEXT_PUBLIC_AUTHORIZATION_ID }],
-    })
-      .then(() => refreshUser())
-      .catch((error) => {
-        console.error('Failed to provision server signer for embedded wallet:', error)
-      })
-  }, [addSigners, authenticated, ready, refreshUser, user])
-
-  return null
-}
-
 export default function Providers({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient())
+
   return (
-    <PrivyProvider
-      appId={env.NEXT_PUBLIC_PRIVY_APP_ID}
-      clientId={env.NEXT_PUBLIC_PRIVY_CLIENT_ID}
-      config={{
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin: 'users-without-wallets',
-          },
-        },
-      }}
-    >
-      <WalletSessionSignerManager />
-      <TraderPresence />
-      <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={wagmiConfig}>
-          <CurrentMarketProvider>
-            <PreloadGate>{children}</PreloadGate>
-          </CurrentMarketProvider>
-        </WagmiProvider>
-      </QueryClientProvider>
-    </PrivyProvider>
+    <ConnectionProvider endpoint={env.NEXT_PUBLIC_BASE_RPC_URL} config={connectionConfig}>
+      <WalletProvider wallets={standardWalletsOnly} autoConnect>
+        <WalletModalProvider>
+          <ArenaWalletProvider>
+            <ArenaChainProvider>
+              <QueryClientProvider client={queryClient}>
+                <ArenaRealtimeProvider>
+                  <TraderPresence />
+                  <CurrentMarketProvider>
+                    <PlayerProvider>
+                      <TradeSetupProvider>
+                        <TradingProvider>
+                          <PreloadGate>{children}</PreloadGate>
+                        </TradingProvider>
+                      </TradeSetupProvider>
+                    </PlayerProvider>
+                  </CurrentMarketProvider>
+                </ArenaRealtimeProvider>
+              </QueryClientProvider>
+            </ArenaChainProvider>
+          </ArenaWalletProvider>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
   )
 }

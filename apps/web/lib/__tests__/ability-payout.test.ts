@@ -63,24 +63,33 @@ describe('abilityPayoutPlan', () => {
 })
 
 describe('pickCheersRecipients', () => {
-  test('excludes the winner, dedupes, and caps at ten', () => {
+  test('excludes the winner, dedupes exact addresses, and caps at ten', () => {
+    const winner = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
     const addresses = [
-      '0xAAA',
-      '0xaaa',
-      '0xBBB',
-      '0xCCC',
-      '0xDDD',
-      '0xEEE',
-      '0xFFF',
-      '0x111',
-      '0x222',
-      '0x333',
-      '0x444',
-      '0x555',
+      winner,
+      winner,
+      '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
+      '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
+      'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu',
+      'MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57',
+      'J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q',
+      'PriCems5tHihc6UDXDjzjeawomAwBduWMGAi8ZUjppd',
+      'DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh',
+      'KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5',
+      'Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz',
+      '5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc',
+      'Magic11111111111111111111111111111111111111',
+      'MagicContext1111111111111111111111111111111',
     ]
-    const picked = pickCheersRecipients(addresses, '0xAAA', 10, () => 0)
+    const picked = pickCheersRecipients(addresses, winner, 10, () => 0)
     expect(picked).toHaveLength(10)
-    expect(picked.map((address) => address.toLowerCase())).not.toContain('0xaaa')
+    expect(picked).not.toContain(winner)
+    expect(new Set(picked).size).toBe(10)
+  })
+
+  test('treats base58 addresses that differ only by case as different traders', () => {
+    const winner = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
+    expect(pickCheersRecipients([winner.toLowerCase(), winner], winner, 10, () => 0)).toEqual([winner.toLowerCase()])
   })
 })
 

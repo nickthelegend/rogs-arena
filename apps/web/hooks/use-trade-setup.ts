@@ -1,196 +1,308 @@
 'use client'
 
-import { env } from '@/env'
-import { publicClient } from '@/lib/viem'
+import { useArenaChain } from '@/components/arena-chain-provider'
+import { useArenaWallet } from '@/components/arena-wallet-provider'
+import { usePlayer } from '@/hooks/use-player'
+import { ArenaApiError, authNonce, authVerify, requestFaucet } from '@/lib/arena-api'
+import { activateAuthWallet, clearStoredAuth, readStoredAuth, signInArena } from '@/lib/arena-auth'
+import { errorMessage } from '@/lib/error'
+import { readStoredSession, SESSION_HOURS, writeStoredSession, type ArenaSession } from '@/lib/session-key'
 import {
-  errorMessage,
   failedTradeSetupStatus,
-  faucetErrorMessage,
   faucetNeeds,
+  formatTokenAmount,
   fundTradeWallet,
   idleTradeSetupStatus,
   isBusyTradeSetup,
   refreshTradeBalances,
   runTradeSetup,
-  tradeWallet,
+  SOL_DECIMALS,
+  SOL_MIN_LAMPORTS,
   type FaucetAsset,
+  type TradeSetupBalances,
+  type TradeSetupDeps,
   type TradeSetupStatus,
-  type TradeSetupUser,
+  type WalletChoice,
 } from '@/lib/trade-setup'
 import {
-  useCreateWallet,
-  useLogin,
-  usePrivy,
-  useSigners,
-  useUser,
-  type User,
-} from '@privy-io/react-auth'
-import { SOMNIA_TESTNET_ADDRESSES } from '@somnia-chain/markets-sdk'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { parseAbi, type Address } from 'viem'
+  createSessionKey,
+  ensurePlayerDelegated,
+  fetchPlayer,
+  keypairSigner,
+  sendErTransaction,
+  type WalletSigner,
+} from '@rogs/arena-sdk'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
+import { PublicKey } from '@solana/web3.js'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
-const testUsdcAddress = SOMNIA_TESTNET_ADDRESSES.testUsdc as Address
-const erc20BalanceAbi = parseAbi(['function balanceOf(address account) view returns (uint256)'])
-const loginMethods = ['google', 'email', 'wallet'] as const
+const authApi = { authNonce, authVerify }
+const CONNECT_CANCEL_GRACE_MS = 1_500
+const FAUCET_CONFIRM_TIMEOUT_MS = 45_000
+const FAUCET_POLL_MS = 1_000
 
-type LoginWaiter = {
-  resolve: (user: User) => void
+type ConnectWaiter = {
+  choice: WalletChoice
+  resolve: (wallet: string) => void
   reject: (error: Error) => void
+  modalOpened: boolean
 }
 
-function asTradeUser(user: User | null | undefined): TradeSetupUser | null {
-  return user ?? null
+type WalletSession = { wallet: string; session: ArenaSession }
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function useTradeSetup() {
-  const { ready, authenticated, user } = usePrivy()
-  const { refreshUser } = useUser()
-  const { createWallet } = useCreateWallet()
-  const { addSigners } = useSigners()
+function useTradeSetupController() {
+  const chain = useArenaChain()
+  const wallet = useArenaWallet()
+  const { player, refresh: refreshPlayer } = usePlayer()
+  const { visible: modalVisible } = useWalletModal()
+  const address = wallet.publicKey?.toBase58() ?? null
   const [status, setStatus] = useState<TradeSetupStatus>(idleTradeSetupStatus)
   const [didPrepare, setDidPrepare] = useState(false)
+  const [session, setSessionState] = useState<WalletSession | null>(null)
   const runningRef = useRef(false)
-  const userRef = useRef(user)
-  const authenticatedRef = useRef(authenticated)
+  const walletRef = useRef(wallet)
   const statusRef = useRef(status)
-  const loginWaiterRef = useRef<LoginWaiter | null>(null)
+  const sessionRef = useRef<WalletSession | null>(null)
+  const waiterRef = useRef<ConnectWaiter | null>(null)
+  const previousAddressRef = useRef(address)
 
   useEffect(() => {
-    userRef.current = user
-  }, [user])
-
-  useEffect(() => {
-    authenticatedRef.current = authenticated
-  }, [authenticated])
+    walletRef.current = wallet
+  }, [wallet])
 
   useEffect(() => {
     statusRef.current = status
   }, [status])
 
-  const { login } = useLogin({
-    onComplete: (params) => {
-      userRef.current = params.user
-      loginWaiterRef.current?.resolve(params.user)
-      loginWaiterRef.current = null
+  const setSession = useCallback((next: WalletSession | null) => {
+    sessionRef.current = next
+    setSessionState(next)
+  }, [])
+
+  // Resolve a pending connect once the chosen wallet shows up, or reject when the modal closes without one.
+  useEffect(() => {
+    const waiter = waiterRef.current
+    if (!waiter) return
+
+    if (address && wallet.mode === waiter.choice) {
+      waiterRef.current = null
+      waiter.resolve(address)
+      return
+    }
+
+    if (waiter.choice !== 'adapter') return
+    if (modalVisible) {
+      waiter.modalOpened = true
+      return
+    }
+    if (!waiter.modalOpened || wallet.connecting) return
+
+    const timer = window.setTimeout(() => {
+      if (waiterRef.current !== waiter) return
+      const latest = walletRef.current
+      if (latest.publicKey || latest.connecting) return
+      waiterRef.current = null
+      waiter.reject(new Error(latest.error ?? 'Wallet connection was cancelled.'))
+    }, CONNECT_CANCEL_GRACE_MS)
+    return () => window.clearTimeout(timer)
+  }, [address, modalVisible, wallet.connecting, wallet.mode])
+
+  useEffect(
+    () => () => {
+      waiterRef.current?.reject(new Error('Setup was closed before a wallet connected.'))
+      waiterRef.current = null
     },
-    onError: (error) => {
-      const waiter = loginWaiterRef.current
-      loginWaiterRef.current = null
-      const message = errorMessage(error)
-      waiter?.reject(new Error(message === 'Unknown error' ? 'Sign-in was cancelled.' : message))
-    },
-  })
+    [],
+  )
 
-  const deps = useCallback(
-    () => ({
-      getUser: () => asTradeUser(userRef.current),
-      connect: () =>
-        new Promise<TradeSetupUser>((resolve, reject) => {
-          const existing = userRef.current
-          if (authenticatedRef.current && existing) {
-            resolve(existing)
-            return
-          }
+  // Restore this wallet's saved session key; setup re-checks it on-chain before relying on it.
+  useEffect(() => {
+    if (!address) {
+      setSession(null)
+      return
+    }
+    try {
+      const stored = readStoredSession(address, chain.programId)
+      setSession(stored ? { wallet: address, session: stored } : null)
+    } catch (error) {
+      setSession(null)
+      setStatus(failedTradeSetupStatus(new Error(`Could not read the saved session key: ${errorMessage(error)}`), { address }))
+    }
+  }, [address, chain.programId, setSession])
 
-          loginWaiterRef.current = {
-            resolve: (next) => resolve(next),
-            reject,
-          }
+  // Switching to another wallet starts that wallet's setup from the beginning.
+  useEffect(() => {
+    const previous = previousAddressRef.current
+    if (previous === address) return
+    previousAddressRef.current = address
+    if (previous && !runningRef.current) {
+      setStatus(idleTradeSetupStatus)
+      setDidPrepare(false)
+    }
+  }, [address])
 
-          try {
-            const pending = login({ loginMethods: [...loginMethods] })
-            void Promise.resolve(pending).catch((error: unknown) => {
-              if (!loginWaiterRef.current) return
-              loginWaiterRef.current = null
-              reject(error instanceof Error ? error : new Error('Could not open Privy.'))
-            })
-          } catch (error) {
-            loginWaiterRef.current = null
-            reject(error instanceof Error ? error : new Error('Could not open Privy.'))
-          }
-        }),
-      createWallet: async () => {
-        const wallet = await createWallet()
-        if (!wallet?.address) throw new Error('Privy did not return a wallet address.')
-        return { address: wallet.address, id: wallet.id ?? null }
-      },
-      assignSigner: async (address: string) => {
-        const result = await addSigners({
-          address,
-          signers: [{ signerId: env.NEXT_PUBLIC_AUTHORIZATION_ID }],
-        })
-        if (result?.user) userRef.current = result.user
-      },
-      refreshUser: async () => {
-        const next = await refreshUser()
-        if (next) userRef.current = next
-      },
-      getBalances: async (address: string) => {
-        const account = address as Address
-        const [stt, tusdc] = await Promise.all([
-          publicClient.getBalance({ address: account }),
-          publicClient.readContract({
-            address: testUsdcAddress,
-            abi: erc20BalanceAbi,
-            functionName: 'balanceOf',
-            args: [account],
-          }),
-        ])
-
-        return { stt, tusdc }
-      },
-      faucet: async (asset: FaucetAsset, amount: string, address: string) => {
-        const response = await fetch('/api/faucet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address, asset, amount }),
-        })
-        const result = (await response.json().catch(() => ({}))) as {
-          error?: string
-          details?: string | string[]
+  const connectWallet = useCallback(
+    (choice: WalletChoice) =>
+      new Promise<string>((resolve, reject) => {
+        const current = walletRef.current
+        if (current.publicKey && current.mode === choice) {
+          resolve(current.publicKey.toBase58())
+          return
         }
 
-        if (!response.ok) {
-          throw new Error(faucetErrorMessage(result))
+        waiterRef.current?.reject(new Error('A newer wallet connection replaced this one.'))
+        waiterRef.current = { choice, resolve, reject, modalOpened: false }
+
+        try {
+          if (choice === 'guest') current.playAsGuest()
+          else current.connect()
+        } catch (error) {
+          waiterRef.current = null
+          reject(error instanceof Error ? error : new Error(errorMessage(error)))
         }
+      }),
+    [],
+  )
+
+  const signerFor = useCallback((owner: string): WalletSigner => {
+    const current = walletRef.current
+    if (!current.publicKey || current.publicKey.toBase58() !== owner) {
+      throw new Error('The connected wallet changed during setup. Start again.')
+    }
+    return {
+      publicKey: current.publicKey,
+      signTransaction: current.signTransaction,
+    } as unknown as WalletSigner
+  }, [])
+
+  const readPlayer = useCallback(
+    async (owner: string) => {
+      if (walletRef.current.publicKey?.toBase58() === owner) return refreshPlayer()
+      return fetchPlayer(chain.connections.er, new PublicKey(owner), chain.programId)
+    },
+    [chain, refreshPlayer],
+  )
+
+  const waitForLamports = useCallback(
+    async (owner: string, minimum: bigint, signature: string) => {
+      const deadline = Date.now() + FAUCET_CONFIRM_TIMEOUT_MS
+      let balance = 0n
+      while (Date.now() < deadline) {
+        balance = BigInt(await chain.connections.base.getBalance(new PublicKey(owner), 'confirmed'))
+        if (balance >= minimum) return balance
+        await sleep(FAUCET_POLL_MS)
+      }
+      throw new Error(
+        `The faucet sent ${signature}, but the wallet still holds ${formatTokenAmount(balance, SOL_DECIMALS)} SOL after ${FAUCET_CONFIRM_TIMEOUT_MS / 1000}s.`,
+      )
+    },
+    [chain],
+  )
+
+  const buildDeps = useCallback(
+    (choice?: WalletChoice): TradeSetupDeps => ({
+      getWallet: () => {
+        const current = walletRef.current
+        if (!current.publicKey) return null
+        if (choice && current.mode !== choice) return null
+        return current.publicKey.toBase58()
+      },
+      connect: () => connectWallet(choice ?? 'guest'),
+      signIn: async (owner) => {
+        if (readStoredAuth(owner)) {
+          activateAuthWallet(owner)
+          return
+        }
+        await signInArena(owner, (message) => walletRef.current.signMessage(message), authApi)
+      },
+      getSolBalance: async (owner) => BigInt(await chain.connections.base.getBalance(new PublicKey(owner), 'confirmed')),
+      requestSol: async (owner) => {
+        const auth = readStoredAuth(owner)
+        if (!auth) throw new Error('Sign in to the arena before requesting devnet SOL.')
+        try {
+          const result = await requestFaucet(auth.token)
+          if ('signature' in result) await waitForLamports(owner, SOL_MIN_LAMPORTS, result.signature)
+          return result
+        } catch (error) {
+          if (error instanceof ArenaApiError && error.status === 401) {
+            clearStoredAuth(owner)
+            activateAuthWallet(owner)
+          }
+          throw error
+        }
+      },
+      ensurePlayer: async (owner) => {
+        const result = await ensurePlayerDelegated(chain.connections, chain.instructions, signerFor(owner))
+        await readPlayer(owner)
+        return { delegateSignature: result.delegateSignature }
+      },
+      ensureSession: async (owner) => {
+        const stored = readStoredSession(owner, chain.programId)
+        if (stored) {
+          const token = await chain.connections.base.getAccountInfo(stored.token, 'confirmed')
+          if (token) {
+            setSession({ wallet: owner, session: stored })
+            return { signature: null }
+          }
+        }
+        const created = await createSessionKey(chain.connections, chain.instructions, signerFor(owner), SESSION_HOURS)
+        const next: ArenaSession = {
+          keypair: created.keypair as unknown as ArenaSession['keypair'],
+          validUntil: created.validUntil,
+          token: created.token as unknown as ArenaSession['token'],
+        }
+        writeStoredSession(owner, next)
+        setSession({ wallet: owner, session: next })
+        return { signature: created.signature }
+      },
+      getPlayer: async (owner) => {
+        const account = await readPlayer(owner)
+        return account ? { joined: account.joined, balance: account.balance } : null
+      },
+      claimChips: async (owner) => {
+        const active = sessionRef.current
+        if (!active || active.wallet !== owner) throw new Error('Create a session key before claiming chips.')
+        const keypair = active.session.keypair as unknown as Parameters<typeof keypairSigner>[0]
+        const instruction = await chain.instructions.claimChips(keypair.publicKey, new PublicKey(owner), active.session.token)
+        const sent = await sendErTransaction(chain.connections.er, [instruction], keypairSigner(keypair))
+        await readPlayer(owner)
+        return sent
       },
     }),
-    [addSigners, createWallet, login, refreshUser],
+    [chain, connectWallet, readPlayer, setSession, signerFor, waitForLamports],
   )
 
   const fail = useCallback((error: unknown) => {
     const current = statusRef.current
-    const wallet = tradeWallet(asTradeUser(userRef.current))
-    const address = wallet?.address ?? current.address
+    const owner = walletRef.current.publicKey?.toBase58() ?? current.address
     const balances =
-      current.stt != null && current.tusdc != null ? { stt: current.stt, tusdc: current.tusdc } : undefined
-    if (address) setDidPrepare(true)
-    setStatus(failedTradeSetupStatus(error, { address, balances }))
+      current.sol != null && current.chips != null ? { sol: current.sol, chips: current.chips } : undefined
+    // A wallet that already has its session key stays on the island so funds can be retried from there.
+    if (owner && sessionRef.current?.wallet === owner) setDidPrepare(true)
+    setStatus(failedTradeSetupStatus(error, { address: owner ?? undefined, balances }))
   }, [])
 
-  const start = useCallback(async () => {
-    if (!ready || runningRef.current) return
-
-    runningRef.current = true
-    setDidPrepare(false)
-    try {
-      await runTradeSetup(deps(), setStatus)
-      setDidPrepare(true)
-    } catch (error) {
-      fail(error)
-    } finally {
-      runningRef.current = false
-    }
-  }, [deps, fail, ready])
-
-  const fund = useCallback(
-    async (asset?: FaucetAsset) => {
-      const address = statusRef.current.address ?? tradeWallet(asTradeUser(userRef.current))?.address
-      if (!ready || runningRef.current || !address) return
-
+  const start = useCallback(
+    async (choice?: WalletChoice) => {
+      if (runningRef.current) return
       runningRef.current = true
+      setDidPrepare(false)
       try {
-        await fundTradeWallet(deps(), address, setStatus, asset)
+        await runTradeSetup(buildDeps(choice), setStatus)
         setDidPrepare(true)
       } catch (error) {
         fail(error)
@@ -198,49 +310,95 @@ export function useTradeSetup() {
         runningRef.current = false
       }
     },
-    [deps, fail, ready],
+    [buildDeps, fail],
+  )
+
+  const fund = useCallback(
+    async (asset?: FaucetAsset) => {
+      const owner = walletRef.current.publicKey?.toBase58()
+      if (runningRef.current || !owner) return
+      runningRef.current = true
+      try {
+        await fundTradeWallet(buildDeps(), owner, setStatus, asset)
+        setDidPrepare(true)
+      } catch (error) {
+        fail(error)
+      } finally {
+        runningRef.current = false
+      }
+    },
+    [buildDeps, fail],
   )
 
   const refresh = useCallback(async () => {
+    const owner = walletRef.current.publicKey?.toBase58()
+    if (runningRef.current || !owner) return
     const current = statusRef.current
-    const address = current.address ?? tradeWallet(asTradeUser(userRef.current))?.address
-    if (!ready || runningRef.current || !address) return
-
     const currentBalances =
-      current.stt != null && current.tusdc != null ? { stt: current.stt, tusdc: current.tusdc } : undefined
+      current.sol != null && current.chips != null ? { sol: current.sol, chips: current.chips } : undefined
 
     runningRef.current = true
     try {
-      await refreshTradeBalances(deps(), address, setStatus, currentBalances)
+      await refreshTradeBalances(buildDeps(), owner, setStatus, currentBalances)
       setDidPrepare(true)
     } catch (error) {
       fail(error)
     } finally {
       runningRef.current = false
     }
-  }, [deps, fail, ready])
+  }, [buildDeps, fail])
 
   useEffect(() => {
-    if (!ready || !authenticated || status.step !== 'idle') return
+    if (!wallet.ready || !address || status.step !== 'idle') return
     const timer = window.setTimeout(() => {
       void start()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [authenticated, ready, start, status.step])
+  }, [address, start, status.step, wallet.ready])
 
-  const balances = status.stt != null && status.tusdc != null ? { stt: status.stt, tusdc: status.tusdc } : undefined
+  const chips = player?.balance ?? status.chips
+  const balances: TradeSetupBalances | undefined =
+    status.sol != null && chips != null ? { sol: status.sol, chips } : undefined
+  const activeSession = session && session.wallet === address ? session.session : null
 
-  return {
-    ready,
-    authenticated,
-    user,
-    status,
-    balances,
-    needs: balances ? faucetNeeds(balances) : { stt: Boolean(status.address), tusdc: Boolean(status.address) },
-    settled: authenticated && didPrepare,
-    busy: isBusyTradeSetup(status.step),
-    start,
-    fund,
-    refresh,
-  }
+  return useMemo(
+    () => ({
+      ready: wallet.ready,
+      authenticated: Boolean(address),
+      user: address ? { wallet: { address } } : null,
+      status,
+      balances,
+      needs: balances ? faucetNeeds(balances) : { sol: Boolean(status.address), chips: Boolean(status.address) },
+      settled: Boolean(address) && didPrepare,
+      busy: isBusyTradeSetup(status.step),
+      start,
+      fund,
+      refresh,
+      session: activeSession,
+      owner: address,
+    }),
+    [activeSession, address, balances, didPrepare, fund, refresh, start, status, wallet.ready],
+  )
+}
+
+type TradeSetupContextValue = ReturnType<typeof useTradeSetupController>
+
+const TradeSetupContext = createContext<TradeSetupContextValue | null>(null)
+
+/** One setup flow for the whole page, shared by the island and the trading pane. */
+export function TradeSetupProvider({ children }: { children: ReactNode }) {
+  const value = useTradeSetupController()
+  return createElement(TradeSetupContext.Provider, { value }, children)
+}
+
+export function useTradeSetup() {
+  const context = useContext(TradeSetupContext)
+  if (!context) throw new Error('useTradeSetup must be used within TradeSetupProvider')
+  return context
+}
+
+/** The session key (if setup created one) and the owner wallet it trades for. */
+export function useArenaSession() {
+  const { session, owner } = useTradeSetup()
+  return { session, owner }
 }

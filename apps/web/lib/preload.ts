@@ -1,12 +1,9 @@
 import { ABILITY_CARDS } from '@/lib/ability'
-import { TRADERS_PATH } from '@/lib/traders'
 
 export const PRELOAD_MIN_MS = 700
 export const PRELOAD_TIMEOUT_MS = 5_000
 export const PRELOAD_FADE_MS = 400
 export const PRELOAD_REDUCED_FADE_MS = 200
-
-export const PRELOAD_REALTIME_PATHS = ['chat', TRADERS_PATH, 'market', 'trades'] as const
 
 export const PRELOAD_IMAGE_URLS = [
   ...ABILITY_CARDS.flatMap((card) => [card.image, card.front]),
@@ -19,7 +16,7 @@ export const PRELOAD_IMAGE_URLS = [
 export type PreloadPhase = 'blocking' | 'exiting' | 'gone'
 
 export type PreloadStatusInput = {
-  privyReady: boolean
+  walletReady: boolean
   fontsReady: boolean
   imagesReady: boolean
   realtimeReady: boolean
@@ -43,7 +40,7 @@ export function preloadFadeMs(reduceMotion: boolean) {
 
 export function preloadStatusLabel(input: PreloadStatusInput) {
   if (input.phase === 'exiting' || input.phase === 'gone' || input.timedOut) return PRELOAD_STATUS.ready
-  if (!input.privyReady) return PRELOAD_STATUS.session
+  if (!input.walletReady) return PRELOAD_STATUS.session
   if (!input.fontsReady) return PRELOAD_STATUS.type
   if (!input.imagesReady) return PRELOAD_STATUS.art
   if (!input.realtimeReady) return PRELOAD_STATUS.live
@@ -52,13 +49,13 @@ export function preloadStatusLabel(input: PreloadStatusInput) {
 }
 
 export function preloadCanReveal(input: {
-  privyReady: boolean
+  walletReady: boolean
   dataSettled: boolean
   minElapsed: boolean
   timedOut: boolean
 }) {
   if (input.timedOut) return true
-  return input.privyReady && input.dataSettled && input.minElapsed
+  return input.walletReady && input.dataSettled && input.minElapsed
 }
 
 export function advancePreloadPhase(phase: PreloadPhase, canReveal: boolean): PreloadPhase {

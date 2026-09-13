@@ -217,7 +217,7 @@ export function toLeaderboardItems(
   const ordered = [...trades].sort((left, right) => left.t - right.t || left.id.localeCompare(right.id))
 
   for (const trade of ordered) {
-    const trader = trade.taker?.toLowerCase()
+    const trader = trade.taker
     const outcome = marketTradeOutcome(trade)
     if (!trader || !outcome) continue
 
@@ -260,7 +260,7 @@ export function floatingProfitsForTrader(
 
   if (!address) return profits
 
-  const trader = address.toLowerCase()
+  const trader = address
   for (const item of toLeaderboardItems(trades, prices, Number.POSITIVE_INFINITY)) {
     if (item.status !== 'open' || item.trader !== trader) continue
     profits[item.outcome] += item.profit

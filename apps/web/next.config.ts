@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@repo/shared'],
+  transpilePackages: ['@repo/shared', '@rogs/arena-sdk'],
   devIndicators: false,
   async headers() {
     return [

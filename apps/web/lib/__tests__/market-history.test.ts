@@ -1,84 +1,70 @@
 import { describe, expect, test } from 'bun:test'
+import type { RoundDto } from '../arena-api'
 import { historyOutcome, historyOutcomes, historySlotMs } from '../market-history'
 
-const openingVenue = '0x679795a0195a1b76cdebb7c51d74e058aee92919b8c3389af86ef24535e8a28c'
-const pricefeedVenue = '0x1a1e6821cde7d0159c0d293177871e09677b4e42307c7db3ba94f8648a5a050f'
-const yesStart = 1_788_844_200
-const noStart = 1_788_843_900
+const slotStart = 1_788_844_200
+const slotEnd = slotStart + 300
 
-function market(overrides: Partial<Parameters<typeof historyOutcomes>[0][number]> = {}) {
+function round(overrides: Partial<RoundDto> = {}): RoundDto {
   return {
-    tradingStart: yesStart,
-    winningOutcome: 0,
-    voided: false,
-    question: 'BTC closes at or above its opening price',
-    venueId: openingVenue,
+    roundId: 12,
+    startTs: slotStart,
+    endTs: slotEnd,
+    strikePrice: '7725512345678',
+    closePrice: '7726000000000',
+    priceExpo: 8,
+    outcome: 'YES',
+    yesPool: 210,
+    noPool: 190,
+    volume: 40,
+    trades: 6,
+    openedSig: 'openSig',
+    resolvedSig: 'resolveSig',
     ...overrides,
   }
 }
 
 describe('historyOutcome', () => {
   test('reads YES as Y and NO as N', () => {
-    expect(historyOutcome({ winningOutcome: 0 })).toBe('Y')
-    expect(historyOutcome({ winningOutcome: 1 })).toBe('N')
+    expect(historyOutcome({ outcome: 'YES' })).toBe('Y')
+    expect(historyOutcome({ outcome: 'NO' })).toBe('N')
   })
 
-  test('leaves unresolved and voided markets empty', () => {
-    expect(historyOutcome({ winningOutcome: null })).toBeNull()
-    expect(historyOutcome({ winningOutcome: 0, voided: true })).toBeNull()
+  test('leaves an unresolved round empty', () => {
+    expect(historyOutcome({ outcome: null })).toBeNull()
+  })
+})
+
+describe('historySlotMs', () => {
+  test('puts a round in the five-minute slot its end closes', () => {
+    expect(historySlotMs(slotEnd)).toBe(slotStart * 1000)
+  })
+
+  test('keeps a late-rolled round in the same slot', () => {
+    expect(historySlotMs(slotEnd)).toBe(historySlotMs(slotEnd - 1))
+    expect(historySlotMs(Number.NaN)).toBeNull()
   })
 })
 
 describe('historyOutcomes', () => {
-  test('keys each resolved market by its trading-start slot', () => {
+  test('keys each resolved round by its slot', () => {
     expect(
       historyOutcomes([
-        market({ tradingStart: String(yesStart), winningOutcome: 0 }),
-        market({ tradingStart: noStart, winningOutcome: 1 }),
+        round({ roundId: 12, endTs: slotEnd, outcome: 'YES' }),
+        round({ roundId: 11, startTs: slotStart - 300, endTs: slotStart, outcome: 'NO' }),
       ]),
     ).toEqual({
-      [yesStart * 1000]: 'Y',
-      [noStart * 1000]: 'N',
+      [slotStart * 1000]: 'Y',
+      [(slotStart - 300) * 1000]: 'N',
     })
-    expect(historySlotMs(String(yesStart))).toBe(yesStart * 1000)
   })
 
-  test('keeps the current venue when two series share a slot', () => {
-    expect(
-      historyOutcomes(
-        [
-          market({
-            winningOutcome: 0,
-            venueId: openingVenue,
-            question: 'BTC closes at or above its opening price',
-          }),
-          market({
-            winningOutcome: 1,
-            venueId: pricefeedVenue,
-            question: 'Pricefeed test: will BTC/USDC\'s price be at or above 78657.71 at unix time 1788844500?',
-          }),
-        ],
-        { venueId: pricefeedVenue },
-      ),
-    ).toEqual({ [yesStart * 1000]: 'N' })
-  })
-
-  test('falls back to the opening-price series when no venue is selected', () => {
+  test('skips rounds that have not resolved yet', () => {
     expect(
       historyOutcomes([
-        market({
-          winningOutcome: 1,
-          venueId: pricefeedVenue,
-          question: 'Pricefeed test: will BTC/USDC\'s price be at or above 78657.71 at unix time 1788844500?',
-        }),
-        market({ winningOutcome: 0, venueId: openingVenue }),
+        round({ roundId: 13, startTs: slotEnd, endTs: slotEnd + 300, outcome: null, closePrice: null }),
+        round({ roundId: 12, outcome: 'NO' }),
       ]),
-    ).toEqual({ [yesStart * 1000]: 'Y' })
-  })
-
-  test('skips markets that have not resolved yet', () => {
-    expect(
-      historyOutcomes([market({ winningOutcome: null }), market({ tradingStart: noStart, winningOutcome: 1 })]),
-    ).toEqual({ [noStart * 1000]: 'N' })
+    ).toEqual({ [slotStart * 1000]: 'N' })
   })
 })

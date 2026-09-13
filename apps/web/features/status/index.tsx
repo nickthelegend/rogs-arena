@@ -1,21 +1,115 @@
 'use client'
 
+import { env } from '@/env'
 import { useTraders } from '@/hooks/use-traders'
+import { errorMessage } from '@/lib/error'
+import {
+  FPS_WINDOW_MS,
+  formatStatusReadout,
+  measureGetSlotRtt,
+  median,
+  pushSample,
+  RTT_INTERVAL_MS,
+  RTT_SAMPLE_WINDOW,
+  RTT_TIMEOUT_MS,
+} from '@/lib/status'
 import { formatTraderCount } from '@/lib/traders'
 import { cn } from 'cn'
+import { useEffect, useState } from 'react'
+
+type RoundTrip = { ms: number | null; error: string | null }
+
+/** Rolling median of real `getSlot` round trips to the MagicBlock ephemeral rollup RPC. */
+function useErRoundTrip(): RoundTrip {
+  const [state, setState] = useState<RoundTrip>({ ms: null, error: null })
+
+  useEffect(() => {
+    const url = env.NEXT_PUBLIC_ER_RPC_URL
+    let samples: number[] = []
+    let inflight: AbortController | null = null
+    let stopped = false
+
+    async function sample() {
+      if (inflight || document.visibilityState !== 'visible') return
+      const controller = new AbortController()
+      inflight = controller
+      const timeout = window.setTimeout(() => controller.abort(), RTT_TIMEOUT_MS)
+      try {
+        const ms = await measureGetSlotRtt(url, controller.signal)
+        if (stopped) return
+        samples = pushSample(samples, ms)
+        setState({ ms: median(samples), error: null })
+      } catch (cause) {
+        if (stopped) return
+        const reason = controller.signal.aborted ? `timed out after ${RTT_TIMEOUT_MS / 1000}s` : errorMessage(cause)
+        setState({ ms: null, error: `MagicBlock ER getSlot failed: ${reason}` })
+      } finally {
+        window.clearTimeout(timeout)
+        inflight = null
+      }
+    }
+
+    void sample()
+    const timer = window.setInterval(sample, RTT_INTERVAL_MS)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      inflight?.abort()
+    }
+  }, [])
+
+  return state
+}
+
+/** Frames actually painted, averaged over each 1 s window. */
+function useFps() {
+  const [fps, setFps] = useState<number | null>(null)
+
+  useEffect(() => {
+    let frame = 0
+    let frames = 0
+    let windowStart = performance.now()
+
+    const tick = (now: number) => {
+      frames += 1
+      const elapsed = now - windowStart
+      if (elapsed > FPS_WINDOW_MS * 2) {
+        // The tab was hidden and frames stopped; start a fresh window instead of reporting the gap.
+        frames = 0
+        windowStart = now
+      } else if (elapsed >= FPS_WINDOW_MS) {
+        setFps((frames * 1000) / elapsed)
+        frames = 0
+        windowStart = now
+      }
+      frame = requestAnimationFrame(tick)
+    }
+
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
+  return fps
+}
 
 export default function SectionStatus() {
   const { online } = useTraders()
+  const roundTrip = useErRoundTrip()
+  const fps = useFps()
+  const readoutTitle =
+    roundTrip.error ??
+    `MagicBlock ER round-trip time: median of the last ${RTT_SAMPLE_WINDOW} getSlot calls, sampled every ${RTT_INTERVAL_MS / 1000}s. FPS is measured with requestAnimationFrame.`
   return (
     <section className="section-panel font-sans flex-none p-2 gap-2 flex justify-between select-none">
       <div className="p-1 px-1.5 bg-[#24362C] leading-none rounded-lg w-fit">
         <span
+          title={readoutTitle}
           className={cn(
             'text-[#74CC92] font-regular text-sm',
             "before:content-[''] before:w-2 before:h-2 before:bg-[#74CC92] before:rounded-full before:inline-block before:mr-1",
           )}
         >
-          Stable 57 MS | 50 FPS
+          {formatStatusReadout(roundTrip.ms, fps)}
         </span>
       </div>
 

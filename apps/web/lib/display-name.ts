@@ -1,6 +1,6 @@
 import { sanitizeName } from '@/lib/utils'
 
-export const DISPLAY_NAME_STORAGE_KEY = 'rizz.displayName'
+export const DISPLAY_NAME_STORAGE_KEY = 'rogs.displayName'
 
 export type DisplayNameStorage = {
   getItem(key: string): string | null
@@ -36,7 +36,7 @@ export function parseDisplayNames(value: unknown): Record<string, string> {
   for (const [address, name] of Object.entries(value as Record<string, unknown>)) {
     if (typeof name !== 'string') continue
     const clean = sanitizeName(name)
-    if (clean) names[address.toLowerCase()] = clean
+    if (clean) names[address] = clean
   }
   return names
 }
@@ -55,7 +55,7 @@ function readAllDisplayNames(storage: DisplayNameStorage | null) {
 
 export function readDisplayName(address: string, storage: DisplayNameStorage | null = defaultDisplayNameStorage()) {
   if (!address) return null
-  return readAllDisplayNames(storage)[address.toLowerCase()] ?? null
+  return readAllDisplayNames(storage)[address] ?? null
 }
 
 export function writeDisplayName(
@@ -63,13 +63,27 @@ export function writeDisplayName(
   name: string,
   storage: DisplayNameStorage | null = defaultDisplayNameStorage(),
 ) {
-  const key = address.toLowerCase()
+  const key = address
   const clean = sanitizeName(name)
   if (!storage || !key || !clean) return
 
   try {
     const names = readAllDisplayNames(storage)
     names[key] = clean
+    storage.setItem(DISPLAY_NAME_STORAGE_KEY, JSON.stringify(names))
+    notifyDisplayNames()
+  } catch {
+    // Storage can be unavailable in private mode.
+  }
+}
+
+export function clearDisplayName(address: string, storage: DisplayNameStorage | null = defaultDisplayNameStorage()) {
+  if (!storage || !address) return
+
+  try {
+    const names = readAllDisplayNames(storage)
+    if (!(address in names)) return
+    delete names[address]
     storage.setItem(DISPLAY_NAME_STORAGE_KEY, JSON.stringify(names))
     notifyDisplayNames()
   } catch {

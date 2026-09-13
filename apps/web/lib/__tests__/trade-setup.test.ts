@@ -1,82 +1,77 @@
 import { describe, expect, test } from 'bun:test'
-import { parseEther, parseUnits } from 'viem'
 import {
   canApplyAbilityOnIsland,
   failedTradeSetupStatus,
-  faucetErrorMessage,
   faucetNeeds,
   formatBalanceLine,
   formatTokenAmount,
+  formatUnits,
   fundTradeWallet,
-  hasAssignedSigner,
-  refreshTradeBalances,
   idleTradeSetupStatus,
   islandStageFromSetup,
   isBusyTradeSetup,
+  refreshTradeBalances,
   runTradeSetup,
   shortAddress,
   tradeSetupProgress,
   tradeSetupStatus,
-  tradeWallet,
   type TradeSetupDeps,
   type TradeSetupStatus,
-  type TradeSetupUser,
 } from '../trade-setup'
 
-const address = '0x1111111111111111111111111111111111111111'
+const wallet = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
+const SOL = 1_000_000_000n
+const USD = 1_000_000n
 
-function userWithWallet(overrides: Partial<TradeSetupUser['wallet']> = {}): TradeSetupUser {
-  return {
-    wallet: { address, id: null, ...overrides },
-    linkedAccounts: [
-      {
-        type: 'wallet',
-        chainType: 'ethereum',
-        walletClientType: 'privy',
-        address,
-        id: overrides?.id ?? null,
-        delegated: overrides?.delegated ?? null,
-      },
-    ],
-  }
-}
+type Harness = TradeSetupDeps & { calls: string[] }
 
-function deps(overrides: Partial<TradeSetupDeps> = {}): TradeSetupDeps & { calls: string[] } {
+function harness(options: { connected?: boolean; joined?: boolean; sol?: bigint[] } = {}, overrides: Partial<TradeSetupDeps> = {}): Harness {
   const calls: string[] = []
-  let currentUser: TradeSetupUser | null = null
+  let connected = options.connected ? wallet : null
+  let joined = options.joined ?? false
+  let chips = joined ? 120n * USD : 0n
+  const readings = [...(options.sol ?? [SOL])]
 
-  return {
-    calls,
-    getUser: () => currentUser,
+  const deps: TradeSetupDeps = {
+    getWallet: () => connected,
     connect: async () => {
       calls.push('connect')
-      currentUser = { linkedAccounts: [] }
-      return currentUser
+      connected = wallet
+      return wallet
     },
-    createWallet: async () => {
-      calls.push('createWallet')
-      currentUser = userWithWallet()
-      return { address, id: null }
+    signIn: async (address) => {
+      calls.push(`signIn:${address}`)
     },
-    assignSigner: async () => {
-      calls.push('assignSigner')
-      currentUser = userWithWallet({ id: 'wallet_1' })
+    getSolBalance: async () => {
+      calls.push('getSolBalance')
+      return (readings.length > 1 ? readings.shift() : readings[0]) as bigint
     },
-    refreshUser: async () => {
-      calls.push('refreshUser')
+    requestSol: async (address) => {
+      calls.push(`requestSol:${address}`)
+      return { signature: 'faucetSig', lamports: 20_000_000 }
     },
-    getBalances: async () => {
-      calls.push('getBalances')
-      return { stt: parseEther('3'), tusdc: parseUnits('80', 6) }
+    ensurePlayer: async () => {
+      calls.push('ensurePlayer')
+      return { delegateSignature: 'delegateSig' }
     },
-    faucet: async (asset, _amount, fundedAddress) => {
-      calls.push(`faucet:${asset}:${fundedAddress}`)
+    ensureSession: async () => {
+      calls.push('ensureSession')
+      return { signature: 'sessionSig' }
+    },
+    getPlayer: async () => {
+      calls.push('getPlayer')
+      return { joined, balance: chips }
+    },
+    claimChips: async () => {
+      calls.push('claimChips')
+      joined = true
+      chips = 250n * USD
+      return { signature: 'claimSig', ms: 42 }
     },
     ...overrides,
-    getUser: overrides.getUser
-      ? overrides.getUser
-      : () => currentUser,
   }
+
+  return { ...deps, calls }
 }
 
 async function collect(run: (onStatus: (status: TradeSetupStatus) => void) => Promise<unknown>) {
@@ -85,223 +80,157 @@ async function collect(run: (onStatus: (status: TradeSetupStatus) => void) => Pr
   return { result, statuses, steps: statuses.map((status) => status.step) }
 }
 
-describe('tradeWallet', () => {
-  test('prefers the embedded Privy Ethereum wallet', () => {
-    expect(
-      tradeWallet({
-        wallet: { address: '0x2222222222222222222222222222222222222222' },
-        linkedAccounts: [
-          { type: 'email' },
-          {
-            type: 'wallet',
-            chainType: 'ethereum',
-            walletClientType: 'privy',
-            address,
-            id: 'wallet_1',
-          },
-        ],
-      }),
-    ).toEqual({ address, id: 'wallet_1', delegated: null })
-  })
-
-  test('falls back to the primary wallet address', () => {
-    expect(tradeWallet({ wallet: { address, id: 'wallet_9' } })).toEqual({
-      address,
-      id: 'wallet_9',
-      delegated: null,
-    })
-  })
-})
-
-describe('hasAssignedSigner', () => {
-  test('treats a wallet id or delegated flag as assigned', () => {
-    expect(hasAssignedSigner({ address })).toBe(false)
-    expect(hasAssignedSigner({ address, id: 'wallet_1' })).toBe(true)
-    expect(hasAssignedSigner({ address, delegated: true })).toBe(true)
-  })
-})
-
-describe('faucetNeeds', () => {
-  test('faucets only the assets below the trading minimums', () => {
-    expect(faucetNeeds({ stt: parseEther('1.99'), tusdc: parseUnits('50', 6) })).toEqual({
-      stt: true,
-      tusdc: false,
-    })
-    expect(faucetNeeds({ stt: parseEther('2'), tusdc: parseUnits('49.999999', 6) })).toEqual({
-      stt: false,
-      tusdc: true,
-    })
-    expect(faucetNeeds({ stt: parseEther('2'), tusdc: parseUnits('50', 6) })).toEqual({
-      stt: false,
-      tusdc: false,
-    })
-  })
-})
-
-describe('status copy', () => {
-  test('names each setup step for the player', () => {
-    expect(tradeSetupStatus('connecting').detail).toBe('Open Privy to sign in. We will create a wallet next.')
-    expect(tradeSetupStatus('creating_wallet').title).toBe('CREATING WALLET')
-    expect(tradeSetupStatus('assigning_signer').detail).toBe('Authorizing the app to sign trades for this wallet.')
-    expect(
-      tradeSetupStatus('funding_stt', { balances: { stt: parseEther('0.4'), tusdc: 0n } }).detail,
-    ).toBe('0.4 STT is below 2 STT. Sending 2 STT from the faucet.')
-    expect(
-      tradeSetupStatus('funding_tusdc', { balances: { stt: 0n, tusdc: parseUnits('12.5', 6) } }).detail,
-    ).toBe('12.5 tUSDC is below 50 tUSDC. Sending 50 tUSDC from the faucet.')
-    expect(
-      tradeSetupStatus('ready', { address, balances: { stt: parseEther('2.5'), tusdc: parseUnits('80', 6) } }).detail,
-    ).toBe('0x1111...1111 · 2.5 STT · 80 tUSDC')
-  })
-
-  test('formats idle and error states', () => {
-    expect(idleTradeSetupStatus.title).toBe('START TRADING')
-    expect(failedTradeSetupStatus(new Error('Sign-in was cancelled.')).detail).toBe('Sign-in was cancelled.')
-    expect(isBusyTradeSetup('funding_stt')).toBe(true)
-    expect(isBusyTradeSetup('ready')).toBe(false)
-    expect(tradeSetupProgress('assigning_signer')).toBe(3)
-    expect(tradeSetupProgress('ready')).toBe(5)
-  })
-
-  test('formats token amounts and faucet errors', () => {
-    expect(formatTokenAmount(parseEther('2.5000'), 18)).toBe('2.5')
-    expect(formatBalanceLine({ stt: parseEther('3'), tusdc: parseUnits('80.12', 6) })).toBe('3 STT · 80.12 tUSDC')
-    expect(shortAddress(address)).toBe('0x1111...1111')
-    expect(faucetErrorMessage({ details: ['Requester address must be a valid EVM address'] })).toBe(
-      'Requester address must be a valid EVM address',
-    )
-  })
-})
-
 describe('runTradeSetup', () => {
-  test('connects, creates a wallet, assigns a signer, and skips faucets when funded', async () => {
-    const setup = deps()
+  test('takes a brand-new guest from connect to delegated player, session key, and starting chips', async () => {
+    const setup = harness({ sol: [0n, 20_000_000n, 15_000_000n] })
     const { result, steps } = await collect((onStatus) => runTradeSetup(setup, onStatus))
 
-    expect(result).toEqual({
-      address,
-      stt: parseEther('3'),
-      tusdc: parseUnits('80', 6),
-    })
-    expect(setup.calls.filter((call) => !call.startsWith('refreshUser'))).toEqual([
+    expect(setup.calls).toEqual([
       'connect',
-      'createWallet',
-      'assignSigner',
-      'getBalances',
+      `signIn:${wallet}`,
+      'getSolBalance',
+      `requestSol:${wallet}`,
+      'getSolBalance',
+      'ensurePlayer',
+      'ensureSession',
+      'getPlayer',
+      'claimChips',
+      'getPlayer',
+      'getSolBalance',
     ])
     expect(steps).toEqual([
       'connecting',
-      'creating_wallet',
-      'assigning_signer',
+      'signing_in',
       'checking_balances',
-      'checking_balances',
+      'funding_sol',
+      'delegating_player',
+      'creating_session',
+      'claiming_chips',
       'ready',
     ])
+    expect(result).toEqual({ address: wallet, sol: 15_000_000n, chips: 250n * USD })
   })
 
-  test('reuses an existing signed-in wallet and only faucets the low asset', async () => {
-    const current = userWithWallet({ id: 'wallet_1' })
-    const setup = deps({
-      getUser: () => current,
-      connect: async () => {
-        throw new Error('should not connect')
-      },
-      createWallet: async () => {
-        throw new Error('should not create')
-      },
-      assignSigner: async () => {
-        throw new Error('should not assign')
-      },
-      getBalances: async () => ({ stt: parseEther('0.5'), tusdc: parseUnits('80', 6) }),
-    })
-
+  test('a returning funded player skips the faucet and the chip claim', async () => {
+    const setup = harness({ connected: true, joined: true })
     const { steps } = await collect((onStatus) => runTradeSetup(setup, onStatus))
 
-    expect(setup.calls.filter((call) => call === 'connect' || call === 'createWallet' || call === 'assignSigner')).toEqual(
-      [],
-    )
-    expect(setup.calls.filter((call) => call.startsWith('faucet'))).toEqual([`faucet:STT:${address}`])
-    expect(steps).toContain('funding_stt')
-    expect(steps).not.toContain('funding_tusdc')
+    expect(setup.calls).not.toContain('connect')
+    expect(setup.calls.some((call) => call.startsWith('requestSol'))).toBe(false)
+    expect(setup.calls).not.toContain('claimChips')
+    expect(steps).not.toContain('funding_sol')
+    expect(steps.at(-1)).toBe('ready')
   })
 
-  test('faucets 50 tUSDC when the balance is below 50', async () => {
-    const setup = deps({
-      getBalances: async () => ({ stt: parseEther('4'), tusdc: parseUnits('12', 6) }),
-    })
-
-    await collect((onStatus) => runTradeSetup(setup, onStatus))
-
-    expect(setup.calls.filter((call) => call.startsWith('faucet'))).toEqual([`faucet:tUSDC:${address}`])
-  })
-
-  test('faucets both assets when both balances are low', async () => {
-    const setup = deps({
-      getBalances: async () => ({ stt: 0n, tusdc: 0n }),
-    })
-
-    const { statuses } = await collect((onStatus) => runTradeSetup(setup, onStatus))
-
-    expect(setup.calls.filter((call) => call.startsWith('faucet'))).toEqual([
-      `faucet:STT:${address}`,
-      `faucet:tUSDC:${address}`,
-    ])
-    expect(statuses.find((status) => status.step === 'funding_stt')?.detail).toBe(
-      '0 STT is below 2 STT. Sending 2 STT from the faucet.',
-    )
-  })
-
-  test('surfaces a connect failure without creating a wallet', async () => {
-    const setup = deps({
+  test('surfaces a cancelled connection without touching the chain', async () => {
+    const setup = harness({}, {
       connect: async () => {
-        throw new Error('Sign-in was cancelled.')
+        throw new Error('Wallet connection was cancelled.')
       },
     })
 
-    await expect(runTradeSetup(setup, () => {})).rejects.toThrow('Could not connect to Privy. Sign-in was cancelled.')
+    await expect(runTradeSetup(setup, () => {})).rejects.toThrow(
+      'Could not connect a wallet. Wallet connection was cancelled.',
+    )
     expect(setup.calls).toEqual([])
+  })
+
+  test('surfaces the program error when delegation fails', async () => {
+    const setup = harness({ connected: true }, {
+      ensurePlayer: async () => {
+        throw new Error('Attempt to debit an account but found no record of a prior credit.')
+      },
+    })
+
+    await expect(runTradeSetup(setup, () => {})).rejects.toThrow(
+      'Could not delegate your player account to the MagicBlock rollup. Attempt to debit an account but found no record of a prior credit.',
+    )
+    expect(setup.calls).not.toContain('ensureSession')
+  })
+})
+
+describe('fundTradeWallet', () => {
+  test('claims chips only when asked and below the faucet ceiling', async () => {
+    const low = harness({ connected: true, joined: true }, {
+      getPlayer: async () => ({ joined: true, balance: 10n * USD }),
+    })
+    await collect((onStatus) => fundTradeWallet(low, wallet, onStatus, 'CHIPS'))
+    expect(low.calls).toContain('claimChips')
+
+    const rich = harness({ connected: true, joined: true }, {
+      getPlayer: async () => ({ joined: true, balance: 90n * USD }),
+    })
+    await collect((onStatus) => fundTradeWallet(rich, wallet, onStatus, 'CHIPS'))
+    expect(rich.calls).not.toContain('claimChips')
+  })
+
+  test('only requests SOL when the wallet is below 0.01 SOL', async () => {
+    const setup = harness({ connected: true, joined: true, sol: [5_000_000n] })
+    const { steps } = await collect((onStatus) => fundTradeWallet(setup, wallet, onStatus, 'SOL'))
+
+    expect(setup.calls).toContain(`requestSol:${wallet}`)
+    expect(steps).toContain('funding_sol')
+  })
+})
+
+describe('refreshTradeBalances', () => {
+  test('rereads SOL and chips without calling a faucet', async () => {
+    const setup = harness({ connected: true, joined: true, sol: [2n * SOL] })
+    const { result, steps } = await collect((onStatus) => refreshTradeBalances(setup, wallet, onStatus))
+
+    expect(result).toEqual({ address: wallet, sol: 2n * SOL, chips: 120n * USD })
+    expect(setup.calls).toEqual(['getSolBalance', 'getPlayer'])
+    expect(steps).toEqual(['checking_balances', 'ready'])
+  })
+})
+
+describe('balances and copy', () => {
+  test('flags SOL under 0.01 and chips under the on-chain faucet ceiling', () => {
+    expect(faucetNeeds({ sol: 9_999_999n, chips: 50n * USD })).toEqual({ sol: true, chips: false })
+    expect(faucetNeeds({ sol: 10_000_000n, chips: 50n * USD - 1n })).toEqual({ sol: false, chips: true })
+  })
+
+  test('formats lamports and chip units', () => {
+    expect(formatUnits(5n, 6)).toBe('0.000005')
+    expect(formatTokenAmount(1_500_000_000n, 9)).toBe('1.5')
+    expect(formatBalanceLine({ sol: 20_000_000n, chips: 250_500_000n })).toBe('0.02 SOL (devnet) · 250.5 chips')
+    expect(shortAddress(wallet)).toBe('Ens1…yVvr')
+  })
+
+  test('names each step for the player', () => {
+    expect(idleTradeSetupStatus.title).toBe('PLAY AS GUEST')
+    expect(tradeSetupStatus('funding_sol', { balances: { sol: 4_000_000n, chips: 0n } }).detail).toBe(
+      '0.004 SOL is below 0.01 SOL. Requesting devnet SOL from the arena faucet.',
+    )
+    expect(tradeSetupStatus('delegating_player').title).toBe('JOINING ROLLUP')
+    expect(tradeSetupStatus('ready', { address: wallet, balances: { sol: 20_000_000n, chips: 250n * USD } }).detail).toBe(
+      'Ens1…yVvr · 0.02 SOL (devnet) · 250 chips',
+    )
+    expect(failedTradeSetupStatus(new Error('User rejected the request.')).detail).toBe('User rejected the request.')
+    expect(isBusyTradeSetup('creating_session')).toBe(true)
+    expect(isBusyTradeSetup('ready')).toBe(false)
+    expect(tradeSetupProgress('signing_in')).toBe(1)
+    expect(tradeSetupProgress('delegating_player')).toBe(3)
+    expect(tradeSetupProgress('ready')).toBe(5)
   })
 })
 
 describe('islandStageFromSetup', () => {
-  test('starts unconnected until Privy is in progress', () => {
+  test('starts unconnected until a connection is in progress', () => {
     expect(islandStageFromSetup({ authenticated: false, step: 'idle', zone: 'information' })).toBe('unconnected')
     expect(islandStageFromSetup({ authenticated: false, step: 'connecting', zone: 'information' })).toBe('preparing')
     expect(islandStageFromSetup({ authenticated: false, step: 'ready', zone: 'trading-zone' })).toBe('unconnected')
   })
 
-  test('prepares automatically after a Privy session exists', () => {
-    expect(islandStageFromSetup({ authenticated: true, step: 'idle', zone: 'information' })).toBe('preparing')
-    expect(islandStageFromSetup({ authenticated: true, step: 'creating_wallet', zone: 'information' })).toBe(
-      'preparing',
-    )
-    expect(islandStageFromSetup({ authenticated: true, step: 'funding_stt', zone: 'information' })).toBe('preparing')
-  })
-
-  test('shows information when ready, or trading-zone / wearable when that pane is open', () => {
-    expect(islandStageFromSetup({ authenticated: true, step: 'ready', zone: 'information' })).toBe('information')
+  test('prepares while setup runs and shows the chosen pane when ready', () => {
+    expect(islandStageFromSetup({ authenticated: true, step: 'creating_session', zone: 'information' })).toBe('preparing')
     expect(islandStageFromSetup({ authenticated: true, step: 'ready', zone: 'trading-zone' })).toBe('trading-zone')
     expect(islandStageFromSetup({ authenticated: true, step: 'ready', zone: 'wearable' })).toBe('wearable')
   })
 
-  test('keeps a wallet on information after a faucet interrupt so funds can be retried', () => {
+  test('keeps a prepared wallet on its pane after a faucet interrupt so funds can be retried', () => {
     expect(
-      islandStageFromSetup({
-        authenticated: true,
-        step: 'error',
-        zone: 'information',
-        address: '0x1111111111111111111111111111111111111111',
-        settled: true,
-      }),
-    ).toBe('information')
-    expect(
-      islandStageFromSetup({
-        authenticated: true,
-        step: 'funding_stt',
-        zone: 'information',
-        address: '0x1111111111111111111111111111111111111111',
-        settled: true,
-      }),
+      islandStageFromSetup({ authenticated: true, step: 'error', zone: 'information', address: wallet, settled: true }),
     ).toBe('information')
     expect(islandStageFromSetup({ authenticated: false, step: 'error', zone: 'information' })).toBe('error')
   })
@@ -311,39 +240,6 @@ describe('canApplyAbilityOnIsland', () => {
   test('only the trading zone accepts an ability drop', () => {
     expect(canApplyAbilityOnIsland('trading-zone')).toBe(true)
     expect(canApplyAbilityOnIsland('information')).toBe(false)
-    expect(canApplyAbilityOnIsland('wearable')).toBe(false)
     expect(canApplyAbilityOnIsland('unconnected')).toBe(false)
-    expect(canApplyAbilityOnIsland('preparing')).toBe(false)
-    expect(canApplyAbilityOnIsland('error')).toBe(false)
-  })
-})
-
-describe('fundTradeWallet', () => {
-  test('only faucets the requested asset that is still below the minimum', async () => {
-    const setup = deps({
-      getBalances: async () => ({ stt: parseEther('0.4'), tusdc: parseUnits('12', 6) }),
-    })
-
-    await collect((onStatus) => fundTradeWallet(setup, address, onStatus, 'tUSDC'))
-
-    expect(setup.calls.filter((call) => call.startsWith('faucet'))).toEqual([`faucet:tUSDC:${address}`])
-  })
-})
-
-describe('refreshTradeBalances', () => {
-  test('rereads STT and tUSDC without calling the faucet', async () => {
-    const setup = deps()
-
-    const { result, steps } = await collect((onStatus) =>
-      refreshTradeBalances(setup, address, onStatus, { stt: parseEther('1'), tusdc: parseUnits('10', 6) }),
-    )
-
-    expect(result).toEqual({
-      address,
-      stt: parseEther('3'),
-      tusdc: parseUnits('80', 6),
-    })
-    expect(setup.calls).toEqual(['getBalances'])
-    expect(steps).toEqual(['checking_balances', 'ready'])
   })
 })

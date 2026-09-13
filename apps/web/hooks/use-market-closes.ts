@@ -1,50 +1,31 @@
 'use client'
 
-import { getFirebaseDatabase } from '@/lib/firebase'
-import { CLOSES_PATH, isMarketClose, type MarketClose } from '@/lib/market-closes'
-import { onValue, ref } from 'firebase/database'
-import { useEffect, useState } from 'react'
-
-type ClosesStatus = 'loading' | 'live' | 'error'
+import { requestRoundData, roundDataStatus, roundIdsFromMarketIds, useArenaRealtime } from '@/lib/arena-realtime'
+import { marketCloseFromDto, type MarketClose } from '@/lib/market-closes'
+import { useEffect, useMemo } from 'react'
 
 const emptyCloses: MarketClose[] = []
 
+/** Take-profit / stop-loss exits indexed from on-chain sells. `marketIds` are round ids. */
 export function useMarketCloses(marketIds: string[]) {
-  const [closes, setCloses] = useState<MarketClose[]>([])
-  const [status, setStatus] = useState<ClosesStatus>('loading')
-  const filterKey = marketIds.map((id) => id.toLowerCase()).join('|')
+  const filterKey = roundIdsFromMarketIds(marketIds).join('|')
+  const roundIds = useMemo(() => (filterKey ? filterKey.split('|').map(Number) : []), [filterKey])
+  const byRound = useArenaRealtime((state) => state.closes)
+  const loads = useArenaRealtime((state) => state.loads)
 
   useEffect(() => {
-    if (!filterKey) return
+    for (const roundId of roundIds) requestRoundData('closes', roundId)
+  }, [loads, roundIds])
 
-    const allowed = new Set(filterKey.split('|'))
-    const unsubscribe = onValue(
-      ref(getFirebaseDatabase(), CLOSES_PATH),
-      (snapshot) => {
-        const raw = snapshot.val() as Record<string, unknown> | null
-        const next = raw
-          ? Object.entries(raw).flatMap(([id, value]) => {
-              if (!isMarketClose(id, value)) return []
-              const marketId = value.marketId.toLowerCase()
-              if (!allowed.has(marketId)) return []
-              return [{ id, ...value, trader: value.trader.toLowerCase() }]
-            })
-          : []
-
-        next.sort((left, right) => left.t - right.t || left.id.localeCompare(right.id))
-        setCloses(next)
-        setStatus('live')
-      },
-      () => {
-        setStatus('error')
-      },
-    )
-
-    return unsubscribe
-  }, [filterKey])
+  const closes = useMemo(() => {
+    if (roundIds.length === 0) return emptyCloses
+    const next = roundIds.flatMap((roundId) => (byRound[roundId] ?? []).map(marketCloseFromDto))
+    next.sort((left, right) => left.t - right.t || left.id.localeCompare(right.id))
+    return next
+  }, [byRound, roundIds])
 
   return {
-    closes: filterKey ? closes : emptyCloses,
-    status: filterKey ? status : 'live',
+    closes,
+    status: roundDataStatus(loads, 'closes', roundIds),
   }
 }

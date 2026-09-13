@@ -3,27 +3,25 @@ import { ABILITY_CARDS } from '../ability'
 import {
   advancePreloadPhase,
   PRELOAD_IMAGE_URLS,
-  PRELOAD_REALTIME_PATHS,
   PRELOAD_STATUS,
   preloadCanReveal,
   preloadFadeMs,
   preloadStatusLabel,
 } from '../preload'
-import { TRADERS_PATH } from '../traders'
 
 describe('preloadCanReveal', () => {
-  test('stays covered until privy, data, and the minimum hold have all landed', () => {
-    expect(preloadCanReveal({ privyReady: true, dataSettled: true, minElapsed: false, timedOut: false })).toBe(false)
-    expect(preloadCanReveal({ privyReady: false, dataSettled: true, minElapsed: true, timedOut: false })).toBe(false)
-    expect(preloadCanReveal({ privyReady: true, dataSettled: false, minElapsed: true, timedOut: false })).toBe(false)
+  test('stays covered until the wallet, data, and the minimum hold have all landed', () => {
+    expect(preloadCanReveal({ walletReady: true, dataSettled: true, minElapsed: false, timedOut: false })).toBe(false)
+    expect(preloadCanReveal({ walletReady: false, dataSettled: true, minElapsed: true, timedOut: false })).toBe(false)
+    expect(preloadCanReveal({ walletReady: true, dataSettled: false, minElapsed: true, timedOut: false })).toBe(false)
   })
 
   test('reveals once auth and data are ready after the hold', () => {
-    expect(preloadCanReveal({ privyReady: true, dataSettled: true, minElapsed: true, timedOut: false })).toBe(true)
+    expect(preloadCanReveal({ walletReady: true, dataSettled: true, minElapsed: true, timedOut: false })).toBe(true)
   })
 
   test('reveals on timeout even if auth or data is still pending', () => {
-    expect(preloadCanReveal({ privyReady: false, dataSettled: false, minElapsed: false, timedOut: true })).toBe(true)
+    expect(preloadCanReveal({ walletReady: false, dataSettled: false, minElapsed: false, timedOut: true })).toBe(true)
   })
 })
 
@@ -43,7 +41,7 @@ describe('advancePreloadPhase', () => {
 
 describe('preloadStatusLabel', () => {
   const pending = {
-    privyReady: false,
+    walletReady: false,
     fontsReady: false,
     imagesReady: false,
     realtimeReady: false,
@@ -54,15 +52,15 @@ describe('preloadStatusLabel', () => {
 
   test('names the next unfinished step', () => {
     expect(preloadStatusLabel(pending)).toBe(PRELOAD_STATUS.session)
-    expect(preloadStatusLabel({ ...pending, privyReady: true })).toBe(PRELOAD_STATUS.type)
-    expect(preloadStatusLabel({ ...pending, privyReady: true, fontsReady: true })).toBe(PRELOAD_STATUS.art)
-    expect(preloadStatusLabel({ ...pending, privyReady: true, fontsReady: true, imagesReady: true })).toBe(
+    expect(preloadStatusLabel({ ...pending, walletReady: true })).toBe(PRELOAD_STATUS.type)
+    expect(preloadStatusLabel({ ...pending, walletReady: true, fontsReady: true })).toBe(PRELOAD_STATUS.art)
+    expect(preloadStatusLabel({ ...pending, walletReady: true, fontsReady: true, imagesReady: true })).toBe(
       PRELOAD_STATUS.live,
     )
     expect(
       preloadStatusLabel({
         ...pending,
-        privyReady: true,
+        walletReady: true,
         fontsReady: true,
         imagesReady: true,
         realtimeReady: true,
@@ -73,7 +71,7 @@ describe('preloadStatusLabel', () => {
   test('reads ready once the board can open', () => {
     expect(
       preloadStatusLabel({
-        privyReady: true,
+        walletReady: true,
         fontsReady: true,
         imagesReady: true,
         realtimeReady: true,
@@ -95,11 +93,10 @@ describe('preloadFadeMs', () => {
 })
 
 describe('preload assets', () => {
-  test('warms ability art and the live firebase paths', () => {
+  test('warms the ability art', () => {
     for (const card of ABILITY_CARDS) {
       expect(PRELOAD_IMAGE_URLS).toContain(card.image)
       expect(PRELOAD_IMAGE_URLS).toContain(card.front)
     }
-    expect(PRELOAD_REALTIME_PATHS).toEqual(['chat', TRADERS_PATH, 'market', 'trades'])
   })
 })

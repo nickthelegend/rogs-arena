@@ -82,7 +82,7 @@ export default function PaneTradingZone({
       ? 'Loading live market...'
       : isLoadingPositions
         ? 'Syncing positions...'
-        : `${amount} tUSDC per trade`)
+        : `$${amount} in chips per trade`)
   const canExitYes = canTakeProfit && yesPosition > 0
   const canExitNo = canTakeProfit && noPosition > 0
   const buyingYes = isTrading && !isTakingProfit && tradingOutcome === 'YES'
@@ -109,7 +109,7 @@ export default function PaneTradingZone({
 
   return (
     <div className="flex h-full w-full gap-2 pointer-events-none">
-      {heartRate.bpm && (
+      {Boolean(heartRate.bpm) && (
         <div id="bpm" className="absolute w-[400px] h-[100px] top-[-80px] left-1/2 -translate-x-1/2 z-0">
           <figure className="w-full h-full">
             <svg
@@ -259,7 +259,8 @@ export default function PaneTradingZone({
           </svg>
         </div>
 
-        <div className="w-full h-full absolute top-0 left-0 flex justify-between text-white/80 font-sans font-medium px-4 py-4">
+        {/* z-40 keeps the TP/SL buttons above the z-30 trading panel, whose Buy hit areas reach under them. */}
+        <div className="w-full h-full absolute top-0 left-0 z-40 flex justify-between text-white/80 font-sans font-medium px-4 py-4">
           <div id="yes-position" className="flex gap-3">
             <button
               type="button"

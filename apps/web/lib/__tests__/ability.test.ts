@@ -91,22 +91,22 @@ describe('abilityCardById', () => {
 describe('islandAbilityMarketToApply', () => {
   test('applies the current market when the countdown hits zero', () => {
     expect(
-      islandAbilityMarketToApply({ previousMarketId: '0xa', marketId: '0xa', remainingSeconds: 0 }),
-    ).toBe('0xa')
+      islandAbilityMarketToApply({ previousMarketId: '41', marketId: '41', remainingSeconds: 0 }),
+    ).toBe('41')
   })
 
   test('applies the finished market when the live market rolls', () => {
     expect(
-      islandAbilityMarketToApply({ previousMarketId: '0xa', marketId: '0xb', remainingSeconds: 300 }),
-    ).toBe('0xa')
+      islandAbilityMarketToApply({ previousMarketId: '41', marketId: '42', remainingSeconds: 300 }),
+    ).toBe('41')
   })
 
   test('does not apply while the current market is still live', () => {
     expect(
-      islandAbilityMarketToApply({ previousMarketId: '0xa', marketId: '0xa', remainingSeconds: 12 }),
+      islandAbilityMarketToApply({ previousMarketId: '41', marketId: '41', remainingSeconds: 12 }),
     ).toBeNull()
     expect(
-      islandAbilityMarketToApply({ previousMarketId: null, marketId: '0xa', remainingSeconds: 40 }),
+      islandAbilityMarketToApply({ previousMarketId: null, marketId: '41', remainingSeconds: 40 }),
     ).toBeNull()
   })
 })

@@ -1,135 +1,108 @@
 'use client'
 
-import { createDreamDexExchange } from '@/lib/dreamdex'
-import { isBinaryMarket, type UnifiedMarket } from '@somnia-chain/markets-sdk'
+import { useArenaChain } from '@/components/arena-chain-provider'
+import { errorMessage } from '@/lib/error'
+import { fetchArena, subscribeArena, toArenaMarket, type ArenaMarket, type ArenaState } from '@rogs/arena-sdk'
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
+export type { ArenaMarket }
+
 type CurrentMarketState = {
-  market: UnifiedMarket | null
+  market: ArenaMarket | null
+  arena: ArenaState | null
   isLoading: boolean
+  error: string | null
 }
 
 const CurrentMarketContext = createContext<CurrentMarketState | null>(null)
 
-const liveMarketRefreshMs = 5_000
+const arenaRefreshMs = 10_000
 export const TARGET_MARKET_INTERVAL_SECONDS = 5 * 60
 
-function binaryMarketIntervalSeconds(market: UnifiedMarket) {
-  if (!isBinaryMarket(market.info)) return null
-
-  const intervalSeconds = market.info.intervalSec ? Number(market.info.intervalSec) : Number.NaN
-  if (Number.isFinite(intervalSeconds) && intervalSeconds > 0) return intervalSeconds
-
-  const tradingStart = Number(market.info.tradingStart)
-  const expiry = Number(market.info.expiry)
-  if (!Number.isFinite(tradingStart) || !Number.isFinite(expiry)) return null
-
-  return expiry - tradingStart
-}
-
-function isLiveTargetMarket(market: UnifiedMarket, nowSeconds: number) {
-  if (!market.active || !isBinaryMarket(market.info) || !market.outcomes?.length) return false
-  if (binaryMarketIntervalSeconds(market) !== TARGET_MARKET_INTERVAL_SECONDS) return false
-
-  const tradingStart = Number(market.info.tradingStart)
-  const expiry = Number(market.info.expiry)
-
-  return Number.isFinite(tradingStart) && Number.isFinite(expiry) && tradingStart <= nowSeconds && nowSeconds < expiry
-}
-
-function compareLiveMarkets(left: UnifiedMarket, right: UnifiedMarket) {
-  if (!isBinaryMarket(left.info) || !isBinaryMarket(right.info)) return 0
-
-  const expiryDelta = Number(left.info.expiry) - Number(right.info.expiry)
-  if (expiryDelta !== 0) return expiryDelta
-
-  const startDelta = Number(right.info.tradingStart) - Number(left.info.tradingStart)
-  if (startDelta !== 0) return startDelta
-
-  return left.symbol.localeCompare(right.symbol)
-}
-
-function marketExpirySeconds(market: UnifiedMarket | null) {
-  if (!market || !isBinaryMarket(market.info)) return undefined
-
-  const expiry = Number(market.info.expiry)
+function marketExpirySeconds(market: ArenaMarket | null) {
+  if (!market) return undefined
+  const expiry = market.info.expiry
   return Number.isFinite(expiry) ? expiry : undefined
 }
 
-export function currentMarketIds(market: UnifiedMarket | null) {
+/** A round's market id is its round id as a decimal string. */
+export function currentMarketIds(market: ArenaMarket | null) {
   if (!market) return []
-
-  const ids = [market.id]
-  if (isBinaryMarket(market.info)) ids.push(market.info.marketId)
-  return [...new Set(ids.map((id) => id.toLowerCase()))]
+  return [...new Set([market.id, market.info.marketId])]
 }
 
-export function marketWindowSeconds(market: UnifiedMarket | null, fallback = TARGET_MARKET_INTERVAL_SECONDS) {
-  if (!market || !isBinaryMarket(market.info)) return fallback
+export function marketWindowSeconds(market: ArenaMarket | null, fallback = TARGET_MARKET_INTERVAL_SECONDS) {
+  if (!market) return fallback
 
-  const intervalSeconds = market.info.intervalSec ? Number(market.info.intervalSec) : Number.NaN
+  const intervalSeconds = market.info.intervalSec
   if (Number.isFinite(intervalSeconds) && intervalSeconds > 0) return intervalSeconds
 
-  const tradingStart = Number(market.info.tradingStart)
-  const expiry = Number(market.info.expiry)
+  const { tradingStart, expiry } = market.info
   if (!Number.isFinite(tradingStart) || !Number.isFinite(expiry)) return fallback
 
   return Math.max(60, expiry - tradingStart)
 }
 
-function useCurrentMarketLoader() {
-  const exchange = useMemo(() => createDreamDexExchange(), [])
-  const [market, setMarket] = useState<UnifiedMarket | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+/** Never lets a slower read replace a newer Arena state (a later round, or more trades in the same round). */
+function newerArena(current: ArenaState | null, next: ArenaState) {
+  if (!current) return next
+  if (next.current.id !== current.current.id) return next.current.id > current.current.id ? next : current
+  if (next.current.trades < current.current.trades) return current
+  return next
+}
+
+function useCurrentMarketLoader(): CurrentMarketState {
+  const { connections, programId } = useArenaChain()
+  const [arena, setArena] = useState<ArenaState | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [expiryTick, setExpiryTick] = useState(0)
 
   useEffect(() => {
-    return () => {
-      void exchange.close()
+    let active = true
+    const accept = (next: ArenaState) => {
+      if (!active) return
+      setArena((current) => newerArena(current, next))
+      setError(null)
+      setLoaded(true)
     }
-  }, [exchange])
+    const reject = (cause: unknown) => {
+      if (!active) return
+      setError(errorMessage(cause))
+      setLoaded(true)
+    }
 
+    const unsubscribe = subscribeArena(connections.er, accept, reject, programId)
+    // The rollup account subscription carries trades and rolls; this read covers a dropped websocket
+    // and retries while the arena account is missing.
+    const timer = window.setInterval(() => {
+      fetchArena(connections.er, programId).then(accept, reject)
+    }, arenaRefreshMs)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      unsubscribe()
+    }
+  }, [connections, programId])
+
+  const endTs = arena?.current.endTs ?? null
   useEffect(() => {
-    let canceled = false
-    let loading = false
+    if (endTs == null) return
+    const delay = endTs * 1000 - Date.now()
+    if (delay <= 0) return
+    const timer = window.setTimeout(() => setExpiryTick((tick) => tick + 1), Math.min(delay + 50, 2_147_483_647))
+    return () => window.clearTimeout(timer)
+  }, [endTs])
 
-    async function loadMarkets() {
-      if (loading) return
-      loading = true
+  const market = useMemo(
+    () => (arena ? toArenaMarket(arena, Math.floor(Date.now() / 1000)) : null),
+    // expiryTick recomputes `active` when the round's end time passes without an account change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [arena, expiryTick],
+  )
 
-      try {
-        const registry = await exchange.loadMarkets(true)
-        const now = Math.floor(Date.now() / 1000)
-        const binaryMarkets = Object.values(registry)
-          .filter((item) => isLiveTargetMarket(item, now))
-          .sort(compareLiveMarkets)
-
-        if (canceled) return
-
-        setMarket((current) => {
-          if (current && binaryMarkets.some((item) => item.symbol === current.symbol)) {
-            return binaryMarkets.find((item) => item.symbol === current.symbol) ?? binaryMarkets[0] ?? null
-          }
-
-          return binaryMarkets[0] ?? null
-        })
-      } catch {
-        if (!canceled) setMarket(null)
-      } finally {
-        loading = false
-        if (!canceled) setIsLoading(false)
-      }
-    }
-
-    void loadMarkets()
-    const refreshTimer = window.setInterval(loadMarkets, liveMarketRefreshMs)
-
-    return () => {
-      canceled = true
-      window.clearInterval(refreshTimer)
-    }
-  }, [exchange])
-
-  return { market, isLoading }
+  return { market, arena, isLoading: !loaded, error }
 }
 
 export function CurrentMarketProvider({ children }: { children: ReactNode }) {

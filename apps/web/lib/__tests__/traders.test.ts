@@ -7,6 +7,7 @@ import {
   parseHeartRateBpm,
   parseTraders,
   traderHeartRateUpdate,
+  traderFromDto,
   traderIdentity,
   traderKey,
   type Trader,
@@ -14,7 +15,7 @@ import {
 
 function trader(overrides: Partial<Trader> = {}): Trader {
   return {
-    address: '0x1111111111111111111111111111111111111111',
+    address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
     name: 'nova',
     status: 'online',
     ...overrides,
@@ -22,17 +23,50 @@ function trader(overrides: Partial<Trader> = {}): Trader {
 }
 
 describe('traderKey', () => {
-  test('lowercases and strips firebase-forbidden characters', () => {
-    expect(traderKey('0xAbC.def#1$[x]/Y')).toBe('0xabc_def_1__x__y')
+  test('keeps base58 case and strips firebase-forbidden characters', () => {
+    expect(traderKey('Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr')).toBe('Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr')
+    expect(traderKey('AbC.def#1$[x]/Y')).toBe('AbC_def_1__x__Y')
+  })
+})
+
+describe('traderFromDto', () => {
+  const dto = {
+    address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
+    name: 'nova',
+    status: 'online' as const,
+    lastSeen: 1_000_500,
+    heartRate: 84,
+    heartRateAt: 1_000_400,
+    isBot: false,
+  }
+
+  test('shifts server timestamps onto the local clock', () => {
+    expect(traderFromDto(dto, 500)).toEqual({
+      address: dto.address,
+      name: 'nova',
+      status: 'online',
+      lastSeen: 1_000_000,
+      heartRate: 84,
+      heartRateAt: 999_900,
+    })
+  })
+
+  test('omits a cleared heart rate and falls back to the short address for a missing name', () => {
+    expect(traderFromDto({ ...dto, name: '', heartRate: null, heartRateAt: null })).toEqual({
+      address: dto.address,
+      name: 'Ens1…yVvr',
+      status: 'online',
+      lastSeen: 1_000_500,
+    })
   })
 })
 
 describe('parseTraders', () => {
   test('reads roster entries and the anonymous counter', () => {
     const snapshot = parseTraders({
-      '0x1111111111111111111111111111111111111111': trader(),
-      '0x2222222222222222222222222222222222222222': trader({
-        address: '0x2222222222222222222222222222222222222222',
+      'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr': trader(),
+      '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr': trader({
+        address: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
         name: 'kira',
         status: 'offline',
       }),
@@ -41,12 +75,12 @@ describe('parseTraders', () => {
 
     expect(snapshot.anonymous).toBe(4)
     expect(snapshot.traders).toEqual([
-      trader(),
       trader({
-        address: '0x2222222222222222222222222222222222222222',
+        address: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
         name: 'kira',
         status: 'offline',
       }),
+      trader(),
     ])
   })
 
@@ -54,7 +88,7 @@ describe('parseTraders', () => {
     expect(
       parseTraders({
         anonymous: -3.8,
-        bad: { address: '0x1', name: 'x' },
+        bad: { address: 'J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q', name: 'x' },
         empty: null,
         ok: trader({ name: 'jax' }),
       }),
@@ -189,8 +223,8 @@ describe('onlineTraderCount', () => {
         {
           traders: [
             trader({ lastSeen: now - 1_000, sessions: { a: now - 1_000 } }),
-            trader({ address: '0x2', name: 'kira', status: 'offline' }),
-            trader({ address: '0x3', name: 'jax', status: 'online', lastSeen: now - 1_000 }),
+            trader({ address: 'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu', name: 'kira', status: 'offline' }),
+            trader({ address: 'MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57', name: 'jax', status: 'online', lastSeen: now - 1_000 }),
           ],
           anonymous: 5,
         },
@@ -210,7 +244,7 @@ describe('onlineTraderCount', () => {
               sessions: { tab1: now - 3_000 },
             }),
             trader({
-              address: '0x2',
+              address: 'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu',
               name: 'kira',
               status: 'online',
               lastSeen: now - 3_000,
@@ -237,23 +271,23 @@ describe('traderIdentity', () => {
   test('prefers a social name and falls back to the wallet', () => {
     expect(
       traderIdentity({
-        id: 'did:privy:1',
-        wallet: { address: '0x1111111111111111111111111111111111111111' },
+        id: 'guest-1',
+        wallet: { address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr' },
         google: { name: 'Nova' },
       }),
     ).toEqual({
-      address: '0x1111111111111111111111111111111111111111',
+      address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
       name: 'Nova',
     })
 
     expect(
       traderIdentity({
-        id: 'did:privy:2',
-        wallet: { address: '0x2222222222222222222222222222222222222222' },
+        id: 'guest-2',
+        wallet: { address: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr' },
       }),
     ).toEqual({
-      address: '0x2222222222222222222222222222222222222222',
-      name: '0x2222...2222',
+      address: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
+      name: '71wt…51sr',
     })
 
     expect(traderIdentity({}, 'you')).toEqual({ address: '', name: 'you' })

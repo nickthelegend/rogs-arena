@@ -1,3 +1,4 @@
+import type { TradeDto } from '@/lib/arena-api'
 import type { LivelineMarker } from '@/lib/liveline'
 import { formatAddress } from '@/lib/format'
 import { getAvatar } from '@/lib/avatar'
@@ -14,6 +15,27 @@ export type MarketTrade = {
   amount?: number | null
   cost?: number | null
   taker?: string | null
+}
+
+/**
+ * Maps an indexed on-chain trade onto the chart/leaderboard shape.
+ * `amount` is the share count and `cost` the USD chips moved (gross in for BUY, net out for SELL).
+ * `side` stays a `BUY_YES`-style string so `marketTradeAction`/`marketTradeOutcome` read it unchanged.
+ */
+export function marketTradeFromDto(trade: TradeDto): MarketTrade {
+  return {
+    id: trade.id,
+    t: trade.t,
+    marketId: String(trade.roundId),
+    symbol: null,
+    side: `${trade.side}_${trade.outcome}`,
+    kind: null,
+    outcome: trade.outcome,
+    price: trade.price,
+    amount: trade.shares,
+    cost: trade.amount,
+    taker: trade.owner,
+  }
 }
 
 function tradeTimeSeconds(t: number) {

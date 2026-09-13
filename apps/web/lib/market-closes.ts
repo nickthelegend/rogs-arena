@@ -1,4 +1,4 @@
-import { CLOSES_PATH } from '@repo/shared/firebase-path'
+import type { CloseDto } from '@/lib/arena-api'
 
 export { CLOSES_PATH, closeKey } from '@repo/shared/firebase-path'
 
@@ -37,5 +37,18 @@ export function isMarketClose(id: string, value: unknown): value is Omit<MarketC
 }
 
 export function closePositionKey(trader: string, outcome: 'YES' | 'NO') {
-  return `${trader.toLowerCase()}:${outcome}`
+  return `${trader}:${outcome}`
+}
+
+export function marketCloseFromDto(close: CloseDto): MarketClose {
+  return {
+    id: close.id,
+    marketId: String(close.roundId),
+    trader: close.trader,
+    outcome: close.outcome,
+    exit: close.exit,
+    profit: close.profit,
+    shares: close.shares,
+    t: close.t,
+  }
 }

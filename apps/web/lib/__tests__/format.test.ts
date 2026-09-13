@@ -5,7 +5,8 @@ import {
   formatChartTime,
   formatDateTime,
   formatDecimalAmount,
-  formatGmt7Hm,
+  formatLocalHm,
+  formatLocalTime,
   formatNumber,
   formatPercent,
   formatShares,
@@ -13,9 +14,19 @@ import {
   priceStatusLabel,
 } from '../format'
 
+const wallet = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
+
+function pad(value: number) {
+  return String(value).padStart(2, '0')
+}
+
 describe('formatAddress', () => {
-  test('truncates a wallet to the first six and last four characters', () => {
-    expect(formatAddress('0x1111111111111111111111111111111111111111')).toBe('0x1111...1111')
+  test('keeps the first four and last four base58 characters without changing case', () => {
+    expect(formatAddress(wallet)).toBe('Ens1…yVvr')
+  })
+
+  test('leaves an address that is already short untouched', () => {
+    expect(formatAddress('Ens1yVvr')).toBe('Ens1yVvr')
   })
 })
 
@@ -40,10 +51,19 @@ describe('clock formatters', () => {
     expect(formatUpdateTime()).toBe('Waiting')
   })
 
-  test('formats a GMT+7 hour-minute label', () => {
-    const noonUtc = Date.UTC(2026, 0, 1, 5, 0, 0)
-    expect(formatGmt7Hm(noonUtc)).toBe('12:00')
-    expect(formatGmt7Hm(Number.NaN)).toBe('')
+  test('formats hour-minute in the viewer local time zone', () => {
+    const at = Date.UTC(2026, 0, 1, 5, 7, 0)
+    const local = new Date(at)
+    expect(formatLocalHm(at)).toBe(`${pad(local.getHours())}:${pad(local.getMinutes())}`)
+    expect(formatLocalHm(Number.NaN)).toBe('')
+  })
+
+  test('formats a local clock with the local zone name', () => {
+    const at = Date.UTC(2026, 0, 1, 5, 7, 9)
+    const local = new Date(at)
+    const clock = `${pad(local.getHours())}:${pad(local.getMinutes())}:${pad(local.getSeconds())}`
+    expect(formatLocalTime(at).startsWith(clock)).toBe(true)
+    expect(formatLocalTime(at)).not.toContain('GMT+7')
   })
 
   test('formats a unix-second timestamp as a medium date', () => {
@@ -70,6 +90,7 @@ describe('amount formatters', () => {
 describe('priceStatusLabel', () => {
   test('names the feed state', () => {
     expect(priceStatusLabel('hydrating')).toBe('Syncing')
+    expect(priceStatusLabel('error')).toBe('Feed error')
     expect(priceStatusLabel('live', Date.UTC(2026, 0, 1, 12, 0, 0))).toMatch(/^Live /)
   })
 })

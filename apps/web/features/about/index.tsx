@@ -1,6 +1,6 @@
 'use client'
 
-import { formatGmt7Time } from '@/lib/format'
+import { formatLocalTime } from '@/lib/format'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 
@@ -8,7 +8,7 @@ export default function SectionAbout() {
   const [time, setTime] = useState('')
 
   useEffect(() => {
-    const tick = () => setTime(formatGmt7Time())
+    const tick = () => setTime(formatLocalTime())
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)

@@ -1,349 +1,354 @@
 'use client'
 
+import { useArenaChain } from '@/components/arena-chain-provider'
 import { useCurrentMarket } from '@/hooks/use-current-market'
+import { usePlayer } from '@/hooks/use-player'
+import { useTradeSetup } from '@/hooks/use-trade-setup'
+import { abilityCardById } from '@/lib/ability'
 import { errorMessage } from '@/lib/error'
+import type { ProgressHeartRate } from '@/lib/progress'
+import { nowSeconds, type ArenaSession } from '@/lib/session-key'
 import {
+  abilityCode,
   binaryMarketId,
+  buyQuote,
   canPlaceTrade,
   canTakeProfit as canTakeProfitPositions,
-  claimRewardsBody,
-  formatClaimResultMessage,
+  DEFAULT_TRADE_AMOUNT,
+  formatSettlementMessage,
   formatTakeProfitResultMessage,
   formatTradeResultMessage,
-  withAbilityMessage,
+  outcomeCode,
   outcomePositions,
-  placePositionBody,
   positionTotal,
-  balancesAfterPosition,
+  roundPosition,
   sellablePositions,
+  sellQuote,
   tradableForOutcome,
-  tradingApiErrorMessage,
+  tradeBlockedReason,
+  withAbilityMessage,
   type Outcome,
-  type PlacePositionResult,
-  type RewardClaimResult,
+  type PlaceTradeResult,
+  type TradeFill,
   type TradeSide,
-  type TradingBalances,
   type TradingStatus,
 } from '@/lib/trading'
-import { progressHeartRateBpm, recordProgressEvent, type ProgressHeartRate } from '@/lib/progress'
-import { tradeWallet } from '@/lib/trade-setup'
-import { usePrivy } from '@privy-io/react-auth'
-import { useEffect, useRef, useState } from 'react'
+import {
+  ABILITY_NONE,
+  chipsToUsd,
+  explorerTxUrl,
+  keypairSigner,
+  parseArenaEvents,
+  sendErTransaction,
+  type ArenaEvent,
+  type ConfirmedTx,
+} from '@rogs/arena-sdk'
+import { PublicKey } from '@solana/web3.js'
+import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 
 export type TradeProgressHint = {
   profit?: number
   heartRate?: ProgressHeartRate
 }
 
-type BalancesResponse = {
-  balances: TradingBalances
+const RECEIPT_ATTEMPTS = 6
+const RECEIPT_DELAY_MS = 300
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function useTrading() {
-  const { user, getAccessToken } = usePrivy()
-  const { market, isLoading: isLoadingMarket } = useCurrentMarket()
-  const walletId = tradeWallet(user)?.id ?? null
+function sessionSigner(session: ArenaSession) {
+  return keypairSigner(session.keypair as unknown as Parameters<typeof keypairSigner>[0])
+}
+
+function txLink(sent: ConfirmedTx) {
+  return { signature: sent.signature, explorerUrl: explorerTxUrl(sent.signature, 'er') }
+}
+
+function useTradingController() {
+  const { connections, instructions, programId } = useArenaChain()
+  const { market, isLoading: isLoadingMarket, error: marketError } = useCurrentMarket()
+  const { player, isLoading: isLoadingPlayer, error: playerError, refresh: refreshPlayer } = usePlayer()
+  const { session, owner } = useTradeSetup()
+  const walletId = owner
   const marketId = binaryMarketId(market)
-  const [balances, setBalances] = useState<TradingBalances | null>(null)
-  const [isLoadingPositions, setIsLoadingPositions] = useState(false)
   const [isTrading, setIsTrading] = useState(false)
   const [tradingOutcome, setTradingOutcome] = useState<Outcome | null>(null)
   const [isTakingProfit, setIsTakingProfit] = useState(false)
   const [isClaiming, setIsClaiming] = useState(false)
   const [status, setStatus] = useState<TradingStatus | null>(null)
-  const snapshotGeneration = useRef(0)
-  const positions = outcomePositions(market, balances)
+  const busyRef = useRef(false)
+  const positions = outcomePositions(market, player)
   const busy = isTrading || isClaiming
+  const tradeReady = Boolean(session && owner)
   const canTrade = canPlaceTrade({
-    walletId,
+    walletId: tradeReady ? walletId : null,
     marketId,
-    tradable: tradableForOutcome(market, 'YES'),
+    tradable: market?.active ? tradableForOutcome(market, 'YES') : null,
     busy,
   })
   const canTakeProfit = canTakeProfitPositions({
-    walletId,
-    marketId,
+    walletId: tradeReady ? walletId : null,
+    marketId: market?.active ? marketId : null,
     positions,
     busy,
   })
-
-  async function tradingApiFetch(url: string, body: unknown) {
-    const accessToken = await getAccessToken()
-    if (!accessToken) throw new Error('Privy session expired. Please sign in again.')
-
-    return fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-  }
-
-  async function refreshPositions({ silent = false }: { silent?: boolean } = {}) {
-    if (!walletId) {
-      setBalances(null)
-      return
-    }
-
-    const generation = snapshotGeneration.current
-
-    try {
-      setIsLoadingPositions(true)
-      const response = await tradingApiFetch('/api/trading/balances', { wallet_id: walletId })
-      const result = (await response.json().catch(() => null)) as BalancesResponse | null
-
-      if (!response.ok) {
-        throw new Error(tradingApiErrorMessage(result, 'Failed to load positions'))
-      }
-
-      if (generation !== snapshotGeneration.current) return
-      setBalances(result?.balances ?? null)
-    } catch (error) {
-      if (generation !== snapshotGeneration.current) return
-      setBalances(null)
-      if (!silent) {
-        setStatus({ tone: 'error', message: `Could not load positions: ${errorMessage(error)}` })
-      }
-    } finally {
-      if (generation === snapshotGeneration.current) setIsLoadingPositions(false)
-    }
-  }
+  const position = roundPosition(player, market?.roundId)
+  const positionAbility =
+    position && (position.yesShares > 0n || position.noShares > 0n) && position.proceeds === 0n ? position.ability : null
 
   useEffect(() => {
-    if (!walletId) return
+    if (playerError) setStatus({ tone: 'error', message: playerError })
+  }, [playerError])
 
-    let canceled = false
-    const generation = snapshotGeneration.current
+  useEffect(() => {
+    if (marketError) setStatus({ tone: 'error', message: marketError })
+  }, [marketError])
 
-    void getAccessToken()
-      .then((accessToken) => {
-        if (!accessToken) throw new Error('Privy session expired. Please sign in again.')
-        return fetch('/api/trading/balances', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ wallet_id: walletId }),
-        })
-      })
-      .then(async (response) => {
-        const result = (await response.json().catch(() => null)) as BalancesResponse | null
-        if (canceled || generation !== snapshotGeneration.current) return
+  function requireSession() {
+    if (!owner) throw new Error('Connect a wallet or play as guest first.')
+    if (!session) throw new Error('Finish setup first: this wallet has no session key yet.')
+    return { ownerKey: new PublicKey(owner), active: session, signer: sessionSigner(session) }
+  }
 
-        if (!response.ok) {
-          setBalances(null)
-          setStatus({
-            tone: 'error',
-            message: `Could not load positions: ${tradingApiErrorMessage(result, 'Failed to load positions')}`,
+  const readEvents = useCallback(
+    async (signature: string): Promise<ArenaEvent[]> => {
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < RECEIPT_ATTEMPTS; attempt++) {
+        try {
+          const transaction = await connections.er.getTransaction(signature, {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
           })
-          setIsLoadingPositions(false)
-          return
+          const logs = transaction?.meta?.logMessages
+          if (logs) return parseArenaEvents(logs, programId)
+        } catch (error) {
+          lastError = error
         }
+        await sleep(RECEIPT_DELAY_MS)
+      }
+      throw new Error(lastError ? errorMessage(lastError) : `the rollup has no logs for ${signature} yet`)
+    },
+    [connections, programId],
+  )
 
-        setBalances(result?.balances ?? null)
-        setIsLoadingPositions(false)
-      })
-      .catch((error: unknown) => {
-        if (canceled || generation !== snapshotGeneration.current) return
-        setBalances(null)
-        setStatus({ tone: 'error', message: `Could not load positions: ${errorMessage(error)}` })
-        setIsLoadingPositions(false)
-      })
-
-    return () => {
-      canceled = true
+  async function placeTrade(
+    outcome: Outcome,
+    side: TradeSide = 'buy',
+    amount?: number,
+    abilityId?: number,
+  ): Promise<PlaceTradeResult | null> {
+    if (side === 'sell') {
+      await takeProfit(outcome)
+      return null
     }
-  }, [getAccessToken, walletId])
+    if (busyRef.current) return null
+    busyRef.current = true
 
-  useEffect(() => {
-    if (!marketId) return
-
-    const controller = new AbortController()
-    void fetch('/api/trading/market-prefetch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ market_id: marketId }),
-      signal: controller.signal,
-    }).catch(() => {})
-
-    return () => controller.abort()
-  }, [marketId])
-
-  useEffect(() => {
-    if (!walletId) return
-
-    let canceled = false
-    void getAccessToken()
-      .then((accessToken) => {
-        if (!accessToken || canceled) return
-        return fetch('/api/abilities/settle', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ wallet_id: walletId }),
-        })
-      })
-      .catch(() => {})
-
-    return () => {
-      canceled = true
-    }
-  }, [getAccessToken, marketId, walletId])
-
-  async function submitPosition(outcome: Outcome, side: TradeSide, amount?: number, abilityId?: number) {
-    const tradable = tradableForOutcome(market, outcome)
-    if (!walletId || !market || !marketId || !tradable) {
-      throw new Error('No live market is ready to trade yet.')
-    }
-
-    const response = await tradingApiFetch(
-      '/api/trading/position',
-      placePositionBody({
-        walletId,
-        marketId,
-        marketSymbol: market.symbol,
-        tradable,
-        outcome,
-        side,
-        amount,
-        abilityId: side === 'buy' ? abilityId : undefined,
-      }),
-    )
-    const result = (await response.json().catch(() => null)) as PlacePositionResult | null
-
-    if (!response.ok) {
-      throw new Error(tradingApiErrorMessage(result, 'Failed to place position'))
-    }
-
-    snapshotGeneration.current += 1
-    setBalances((current) =>
-      balancesAfterPosition({
-        current,
-        reported: result?.balances,
-        symbol: tradable,
-        side,
-        filled: result?.order.filled ?? 0,
-      }),
-    )
-    return result
-  }
-
-  async function placeTrade(outcome: Outcome, side: TradeSide = 'buy', amount?: number, abilityId?: number) {
     try {
       setIsTrading(true)
       setTradingOutcome(outcome)
-      setStatus({
-        tone: 'neutral',
-        message: `${side === 'buy' ? 'Buying' : 'Selling'} ${outcome}...`,
-      })
+      setStatus({ tone: 'neutral', message: `Buying ${outcome}...` })
 
-      const result = await submitPosition(outcome, side, amount, abilityId)
-      const filled = result?.order.filled ?? 0
+      const { ownerKey, active, signer } = requireSession()
+      const ability = abilityCode(abilityId)
+      const blocked = tradeBlockedReason(market, nowSeconds(), { ability: ability !== ABILITY_NONE })
+      if (blocked || !market) throw new Error(blocked ?? 'No live round is open yet.')
+
+      const usd = amount ?? DEFAULT_TRADE_AMOUNT
+      const quote = buyQuote(market, outcome, usd)
+      const instruction = await instructions.buy(
+        active.keypair.publicKey,
+        ownerKey,
+        outcomeCode(outcome),
+        quote.amount,
+        quote.minShares,
+        ability,
+        active.token,
+      )
+      const sent = await sendErTransaction(connections.er, [instruction], signer)
+
+      let fill: TradeFill = { side: 'buy', outcome, shares: null, usd, ms: sent.ms }
+      let abilityPlay: PlaceTradeResult['abilityPlay'] = null
+      const notes: string[] = []
+
+      try {
+        const trade = (await readEvents(sent.signature)).find((event) => event.name === 'TradeExecuted')
+        if (trade?.name === 'TradeExecuted') {
+          fill = { ...fill, shares: chipsToUsd(trade.data.shares), usd: chipsToUsd(trade.data.amount) }
+          if (ability !== ABILITY_NONE && trade.data.ability === ability) abilityPlay = { id: sent.signature }
+        }
+      } catch (error) {
+        notes.push(`The trade confirmed, but its receipt could not be read: ${errorMessage(error)}.`)
+      }
+
+      if (ability !== ABILITY_NONE && !abilityPlay) {
+        try {
+          const refreshed = await refreshPlayer()
+          if (roundPosition(refreshed, market.roundId)?.ability === ability) abilityPlay = { id: sent.signature }
+        } catch (error) {
+          notes.push(`Could not re-read your position: ${errorMessage(error)}.`)
+        }
+      }
+
+      const card = ability !== ABILITY_NONE ? abilityCardById(ability) : null
+      if (card) {
+        notes.unshift(
+          abilityPlay
+            ? `${card.name} rides on this position.`
+            : `${card.name} is not on this position on-chain; it stays parked.`,
+        )
+      }
+
       setStatus({
         tone: 'success',
-        message: withAbilityMessage(
-          formatTradeResultMessage({
-            side,
-            outcome,
-            filled,
-            amount: result?.order.amount ?? amount ?? 0,
-          }),
-          result?.abilitySettlement,
-        ),
+        message: withAbilityMessage(formatTradeResultMessage(fill), notes.join(' ') || null),
+        ...txLink(sent),
       })
-      if (side === 'buy' && filled > 0) recordProgressEvent({ type: 'placed' })
-      return result
+      return { signature: sent.signature, ms: sent.ms, abilityPlay }
     } catch (error) {
       setStatus({ tone: 'error', message: errorMessage(error) })
       return null
     } finally {
+      busyRef.current = false
       setIsTrading(false)
       setTradingOutcome(null)
     }
   }
 
-  async function takeProfit(outcome?: Outcome, progress?: TradeProgressHint) {
+  async function takeProfit(outcome?: Outcome, _progress?: TradeProgressHint) {
     const lots = sellablePositions(positions, outcome)
     if (lots.length === 0) {
       setStatus({ tone: 'error', message: 'No shares to sell.' })
       return
     }
+    if (busyRef.current) return
+    busyRef.current = true
 
     try {
       setIsTrading(true)
       setIsTakingProfit(true)
-      setStatus({
-        tone: 'neutral',
-        message: outcome ? `Selling ${outcome}...` : 'Selling all shares...',
-      })
+      setStatus({ tone: 'neutral', message: outcome ? `Selling ${outcome}...` : 'Selling all shares...' })
 
-      const results = []
-      let settlement = null
+      const { ownerKey, active, signer } = requireSession()
+      const blocked = tradeBlockedReason(market, nowSeconds())
+      if (blocked || !market) throw new Error(blocked ?? 'No live round is open yet.')
+
+      let pools = { yesPool: market.yesPool, noPool: market.noPool, feeBps: market.feeBps }
+      const fills: TradeFill[] = []
+      const notes: string[] = []
+      let last: ConfirmedTx | null = null
+
       for (const lot of lots) {
-        const result = await submitPosition(lot.label, 'sell', lot.total)
-        const filled = result?.order.filled ?? 0
-        results.push({
-          outcome: lot.label,
-          filled,
-          amount: result?.order.amount ?? lot.total,
-        })
-        if (result?.abilitySettlement) settlement = result.abilitySettlement
-        const profit = progress?.profit
-        if (filled > 0 && profit != null && Number.isFinite(profit)) {
-          recordProgressEvent({
-            type: 'result',
-            won: profit >= 0,
-            heartRateBpm: progressHeartRateBpm(progress?.heartRate),
-          })
+        const quote = sellQuote(pools, lot.label, lot.shares)
+        const instruction = await instructions.sell(
+          active.keypair.publicKey,
+          ownerKey,
+          outcomeCode(lot.label),
+          lot.shares,
+          quote.minOut,
+          active.token,
+        )
+        const sent = await sendErTransaction(connections.er, [instruction], signer)
+        last = sent
+        pools = quote.pools
+
+        let fill: TradeFill = { side: 'sell', outcome: lot.label, shares: lot.total, usd: null, ms: sent.ms }
+        try {
+          const trade = (await readEvents(sent.signature)).find((event) => event.name === 'TradeExecuted')
+          if (trade?.name === 'TradeExecuted') {
+            fill = { ...fill, shares: chipsToUsd(trade.data.shares), usd: chipsToUsd(trade.data.amount) }
+          }
+        } catch (error) {
+          notes.push(`The ${lot.label} sale confirmed, but its receipt could not be read: ${errorMessage(error)}.`)
         }
+        fills.push(fill)
       }
 
-      setStatus({ tone: 'success', message: withAbilityMessage(formatTakeProfitResultMessage(results), settlement) })
+      setStatus({
+        tone: 'success',
+        message: [formatTakeProfitResultMessage(fills), ...notes].join(' '),
+        ...(last ? txLink(last) : {}),
+      })
     } catch (error) {
       setStatus({ tone: 'error', message: errorMessage(error) })
     } finally {
+      busyRef.current = false
       setIsTrading(false)
       setIsTakingProfit(false)
     }
   }
 
   async function claimRewards() {
-    if (!walletId) {
-      setStatus({ tone: 'error', message: 'No Privy server-signing wallet is available.' })
-      return
-    }
+    if (busyRef.current) return
+    busyRef.current = true
 
     try {
       setIsClaiming(true)
-      setStatus({ tone: 'neutral', message: 'Checking closed markets for rewards...' })
+      setStatus({ tone: 'neutral', message: 'Settling resolved rounds on the MagicBlock ER...' })
 
-      const response = await tradingApiFetch('/api/trading/rewards', claimRewardsBody(walletId))
-      const result = (await response.json().catch(() => null)) as RewardClaimResult | null
+      const { ownerKey, signer } = requireSession()
+      const instruction = await instructions.settlePlayer(ownerKey)
+      const sent = await sendErTransaction(connections.er, [instruction], signer)
 
-      if (!response.ok) {
-        throw new Error(tradingApiErrorMessage(result, 'Failed to claim rewards'))
+      let message: string
+      try {
+        const settled = (await readEvents(sent.signature)).flatMap((event) =>
+          event.name === 'PositionSettled' && event.data.owner.toBase58() === ownerKey.toBase58() ? [event.data] : [],
+        )
+        message = `${formatSettlementMessage(settled)} Confirmed in ${Math.round(sent.ms)} ms on the MagicBlock ER.`
+      } catch (error) {
+        message = `Settlement confirmed in ${Math.round(sent.ms)} ms, but its receipt could not be read: ${errorMessage(error)}.`
       }
 
-      if (result?.balances) setBalances(result.balances)
-      setStatus({
-        tone: 'success',
-        message: withAbilityMessage(
-          formatClaimResultMessage(result?.claimed.length ?? 0),
-          result?.abilitySettlements?.[0],
-        ),
-      })
-      void refreshPositions({ silent: true })
+      try {
+        await refreshPlayer()
+      } catch (error) {
+        message = `${message} Could not re-read your balance: ${errorMessage(error)}.`
+      }
+
+      setStatus({ tone: 'success', message, ...txLink(sent) })
     } catch (error) {
       setStatus({ tone: 'error', message: errorMessage(error) })
     } finally {
+      busyRef.current = false
       setIsClaiming(false)
     }
   }
+
+  /** Attaches a card to the position already held in the open round (before the ability lock). */
+  const attachAbility = useCallback(
+    async (abilityId: number): Promise<ConfirmedTx | null> => {
+      const card = abilityCardById(abilityId)
+      const name = card?.name ?? 'the card'
+      try {
+        setStatus({ tone: 'neutral', message: `Attaching ${name} on-chain...` })
+        if (!owner) throw new Error('Connect a wallet or play as guest first.')
+        if (!session) throw new Error('Finish setup first: this wallet has no session key yet.')
+        const blocked = tradeBlockedReason(market, nowSeconds(), { ability: true })
+        if (blocked || !market) throw new Error(blocked ?? 'No live round is open yet.')
+
+        const instruction = await instructions.attachAbility(
+          session.keypair.publicKey,
+          new PublicKey(owner),
+          abilityCode(abilityId),
+          session.token,
+        )
+        const sent = await sendErTransaction(connections.er, [instruction], sessionSigner(session))
+        setStatus({
+          tone: 'success',
+          message: `${card?.name ?? 'Ability'} attached to your round position in ${Math.round(sent.ms)} ms on the MagicBlock ER.`,
+          ...txLink(sent),
+        })
+        return sent
+      } catch (error) {
+        setStatus({ tone: 'error', message: `Could not attach ${name}: ${errorMessage(error)}` })
+        return null
+      }
+    },
+    [connections, instructions, market, owner, session],
+  )
 
   return {
     market,
@@ -352,19 +357,38 @@ export function useTrading() {
     positions,
     yesPosition: positionTotal(positions, 'YES'),
     noPosition: positionTotal(positions, 'NO'),
-    address: tradeWallet(user)?.address ?? null,
-    quoteBalance: market?.quote ? (balances?.[market.quote]?.total ?? 0) : 0,
+    address: owner,
+    quoteBalance: player ? chipsToUsd(player.balance) : 0,
     status,
     isTrading,
     tradingOutcome,
     isTakingProfit,
     isClaiming,
-    isLoadingPositions,
+    isLoadingPositions: isLoadingPlayer,
     canTrade,
     canTakeProfit,
-    canClaim: Boolean(walletId) && !busy,
+    canClaim: tradeReady && !busy,
     placeTrade,
     takeProfit,
     claimRewards,
+    attachAbility,
+    /** Ability code on the open-round position, 0 when none, null when there is no attachable position. */
+    positionAbility,
   }
+}
+
+type TradingContextValue = ReturnType<typeof useTradingController>
+
+const TradingContext = createContext<TradingContextValue | null>(null)
+
+/** One trading instance for the page, so the island and the trading pane never race each other. */
+export function TradingProvider({ children }: { children: ReactNode }) {
+  const value = useTradingController()
+  return createElement(TradingContext.Provider, { value }, children)
+}
+
+export function useTrading() {
+  const context = useContext(TradingContext)
+  if (!context) throw new Error('useTrading must be used within TradingProvider')
+  return context
 }

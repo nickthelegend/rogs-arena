@@ -1,27 +1,17 @@
 'use client'
 
-import { BTC_ASSET } from '@/lib/btc'
-import { createDreamDexExchange } from '@/lib/dreamdex'
+import { useBtcPrice } from '@/hooks/use-btc-price'
 import { formatUsd } from '@/lib/format'
-import { SomniaMarketsProvider, useLivePrice } from '@somnia-chain/markets-sdk/react'
-import { useEffect, useMemo } from 'react'
-
-function LiveTabNameSync() {
-  const btcPrice = useLivePrice(BTC_ASSET)
-
-  useEffect(() => {
-    document.title = `Rizz Club | BTC - ${formatUsd(btcPrice?.price)}`
-  }, [btcPrice?.price])
-
-  return null
-}
+import { useEffect } from 'react'
 
 export default function LiveTabName() {
-  const exchange = useMemo(() => createDreamDexExchange(), [])
+  const { latest, error } = useBtcPrice()
 
-  return (
-    <SomniaMarketsProvider client={exchange.client}>
-      <LiveTabNameSync />
-    </SomniaMarketsProvider>
-  )
+  useEffect(() => {
+    if (latest) document.title = `Rogs Arena | BTC - ${formatUsd(latest.price)}`
+    else if (error) document.title = 'Rogs Arena | BTC - oracle unavailable'
+    else document.title = 'Rogs Arena | BTC'
+  }, [error, latest])
+
+  return null
 }

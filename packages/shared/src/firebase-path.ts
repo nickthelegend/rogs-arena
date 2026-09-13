@@ -1,5 +1,7 @@
 const firebaseKeyForbidden = new Set(['.', '#', '$', '[', ']', '/'])
 
+// Realtime channel names and presence timings shared by the web app and the arena service.
+// Keys keep their case: Solana base58 addresses are case-sensitive.
 export const TRADERS_PATH = 'traders'
 export const CLOSES_PATH = 'closes'
 export const ANONYMOUS_FIELD = 'anonymous'
@@ -16,9 +18,9 @@ export function firebaseKey(id: string) {
 }
 
 export function traderKey(id: string) {
-  return firebaseKey(id.toLowerCase())
+  return firebaseKey(id)
 }
 
 export function closeKey(marketId: string, trader: string, outcome: string) {
-  return firebaseKey(`${marketId.toLowerCase()}_${trader.toLowerCase()}_${outcome}`)
+  return firebaseKey(`${marketId}_${trader}_${outcome}`)
 }

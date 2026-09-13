@@ -1,60 +1,40 @@
+import type { RoundDto } from '@/lib/arena-api'
 import { BTC_ASSET } from '@/lib/btc'
 
 export const HISTORY_ASSET = BTC_ASSET
 export const HISTORY_INTERVAL_SECONDS = 5 * 60
-export const HISTORY_PAGE_SIZE = 48
-export const HISTORY_MIXED_PAGE_SIZE = 96
+export const HISTORY_PAGE_SIZE = 96
 
-const openingPriceQuestion = 'BTC closes at or above its opening price'
+const historyIntervalMs = HISTORY_INTERVAL_SECONDS * 1000
 
 export type HistoryOutcome = 'Y' | 'N'
 
-export type HistoryMarket = {
-  tradingStart: string | number
-  winningOutcome: number | null
-  voided?: boolean | null
-  question?: string | null
-  venueId?: string | null
+export type HistoryRound = Pick<RoundDto, 'endTs' | 'outcome'>
+
+/**
+ * Rounds close on 5-minute boundaries, so a round belongs to the slot its end closes.
+ * A late crank roll shortens the start but never moves the round into another slot.
+ */
+export function historySlotMs(endTs: number) {
+  if (!Number.isFinite(endTs) || endTs <= 0) return null
+  return Math.floor((endTs * 1000 - 1) / historyIntervalMs) * historyIntervalMs
 }
 
-export type HistorySeries = {
-  venueId?: string | null
-  question?: string | null
-}
-
-export function historySlotMs(tradingStart: string | number) {
-  const seconds = Number(tradingStart)
-  if (!Number.isFinite(seconds)) return null
-  return seconds * 1000
-}
-
-export function historyOutcome(market: Pick<HistoryMarket, 'winningOutcome' | 'voided'>): HistoryOutcome | null {
-  if (market.voided) return null
-  if (market.winningOutcome === 0) return 'Y'
-  if (market.winningOutcome === 1) return 'N'
+export function historyOutcome(round: Pick<RoundDto, 'outcome'>): HistoryOutcome | null {
+  if (round.outcome === 'YES') return 'Y'
+  if (round.outcome === 'NO') return 'N'
   return null
 }
 
-export function historyOutcomes(markets: HistoryMarket[], series: HistorySeries = {}): Record<number, HistoryOutcome> {
+export function historyOutcomes(rounds: readonly HistoryRound[]): Record<number, HistoryOutcome> {
   const outcomes: Record<number, HistoryOutcome> = {}
 
-  for (const market of selectHistoryMarkets(markets, series)) {
-    const slot = historySlotMs(market.tradingStart)
-    const outcome = historyOutcome(market)
+  for (const round of rounds) {
+    const slot = historySlotMs(round.endTs)
+    const outcome = historyOutcome(round)
     if (slot == null || outcome == null) continue
     outcomes[slot] = outcome
   }
 
   return outcomes
-}
-
-function selectHistoryMarkets(markets: HistoryMarket[], series: HistorySeries) {
-  const venueId = series.venueId?.toLowerCase()
-  if (venueId) {
-    const matched = markets.filter((market) => market.venueId?.toLowerCase() === venueId)
-    if (matched.length > 0) return matched
-  }
-
-  const opening = markets.filter((market) => market.question === openingPriceQuestion)
-  return opening.length > 0 ? opening : markets
 }

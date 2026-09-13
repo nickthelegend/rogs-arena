@@ -16,7 +16,7 @@ export const useAbilityFlippedStore = create<AbilityFlippedState>()(
       toggleFlipped: (id) => set((state) => ({ flippedIds: toggleFlippedId(state.flippedIds, id) })),
     }),
     {
-      name: 'rizz-ability-flipped',
+      name: 'rogs.abilityFlipped',
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
     },

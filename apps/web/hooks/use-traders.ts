@@ -1,224 +1,124 @@
 'use client'
 
-import { useDisplayName } from '@/hooks/use-display-name'
-import { getFirebaseDatabase } from '@/lib/firebase'
-import {
-  ANONYMOUS_FIELD,
-  PRESENCE_HEARTBEAT_MS,
-  TRADERS_PATH,
-  onlineTraderCount,
-  parseTraders,
-  traderHeartRateUpdate,
-  traderIdentity,
-  traderKey,
-} from '@/lib/traders'
-import { onDisconnect, onValue, ref, remove, set, update } from 'firebase/database'
-import { useEffect, useRef, useState } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
+import { useArenaChain } from '@/components/arena-chain-provider'
+import { useArenaAuth } from '@/hooks/use-arena-auth'
+import { useArenaSession } from '@/hooks/use-trade-setup'
+import { arenaRealtime, useArenaRealtime } from '@/lib/arena-realtime'
+import { errorMessage } from '@/lib/error'
+import { PRESENCE_HEARTBEAT_MS, traderFromDto } from '@/lib/traders'
+import { HEART_BPM_MAX, HEART_BPM_MIN, keypairSigner, sendErTransaction } from '@rogs/arena-sdk'
+import { PublicKey } from '@solana/web3.js'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type TradersStatus = 'loading' | 'live' | 'error'
 
-const SESSION_STORAGE_KEY = 'rizz.traderSession'
+/** How often a live wearable reading is written on-chain with `report_heart` (gasless on the ER). */
+export const HEART_CHAIN_INTERVAL_MS = 5_000
 
-function traderRefFor(address: string) {
-  return ref(getFirebaseDatabase(), `${TRADERS_PATH}/${traderKey(address)}`)
-}
+export type HeartChainReport = { signature: string | null; ms: number | null; error: string | null }
 
-function getTabSessionId() {
-  try {
-    const existing = sessionStorage.getItem(SESSION_STORAGE_KEY)
-    if (existing) return existing
-    const id = crypto.randomUUID()
-    sessionStorage.setItem(SESSION_STORAGE_KEY, id)
-    return id
-  } catch {
-    return crypto.randomUUID()
-  }
-}
+const emptyHeartReport: HeartChainReport = { signature: null, ms: null, error: null }
 
+/** Hands the arena sign-in to the tab's WebSocket, which owns hello and the 15 s presence beat. */
 export function useTraderPresence() {
-  const { ready, authenticated, user } = usePrivy()
-  const address = user?.wallet?.address || user?.id || ''
-  const fallback = user ? traderIdentity(user).name : ''
-  const { name } = useDisplayName(address, fallback)
-  const nameRef = useRef(name)
-  nameRef.current = name
+  const { token, wallet } = useArenaAuth()
 
   useEffect(() => {
-    if (!ready) return
-
-    const db = getFirebaseDatabase()
-    const sessionId = getTabSessionId()
-    const connectedRef = ref(db, '.info/connected')
-    let cancelled = false
-    let heartbeat: ReturnType<typeof setInterval> | undefined
-    let release: (() => Promise<void>) | undefined
-    let writing = Promise.resolve()
-
-    function enqueue(work: () => Promise<void>) {
-      writing = writing.then(work).catch((error) => {
-        console.error('Failed to update trader presence:', error)
-      })
-      return writing
-    }
-
-    async function write() {
-      if (cancelled) return
-      const now = Date.now()
-
-      if (authenticated && address) {
-        await update(traderRefFor(address), {
-          address,
-          name: nameRef.current || address,
-          status: 'online',
-          lastSeen: now,
-          [`sessions/${sessionId}`]: now,
-        })
-        return
-      }
-
-      await set(ref(db, `${TRADERS_PATH}/${ANONYMOUS_FIELD}/${sessionId}`), now)
-    }
-
-    async function arm() {
-      if (cancelled) return
-      await release?.()
-      release = undefined
-      if (cancelled) return
-
-      if (authenticated && address) {
-        const sessionRef = ref(db, `${TRADERS_PATH}/${traderKey(address)}/sessions/${sessionId}`)
-        const disconnect = onDisconnect(sessionRef)
-        await disconnect.remove()
-        if (cancelled) {
-          await disconnect.cancel()
-          return
-        }
-        await write()
-        release = async () => {
-          await disconnect.cancel()
-          await remove(sessionRef)
-        }
-        return
-      }
-
-      const sessionRef = ref(db, `${TRADERS_PATH}/${ANONYMOUS_FIELD}/${sessionId}`)
-      const disconnect = onDisconnect(sessionRef)
-      await disconnect.remove()
-      if (cancelled) {
-        await disconnect.cancel()
-        return
-      }
-      await write()
-      release = async () => {
-        await disconnect.cancel()
-        await remove(sessionRef)
-      }
-    }
-
-    const unsubscribe = onValue(connectedRef, (snapshot) => {
-      if (snapshot.val() !== true) return
-      void enqueue(arm)
-    })
-
-    heartbeat = setInterval(() => {
-      void enqueue(write)
-    }, PRESENCE_HEARTBEAT_MS)
-
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return
-      void enqueue(arm)
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', onVisible)
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-      if (heartbeat) clearInterval(heartbeat)
-      document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('focus', onVisible)
-      void enqueue(async () => {
-        await release?.()
-      })
-    }
-  }, [address, authenticated, ready])
-
-  useEffect(() => {
-    if (!ready || !authenticated || !address || !name) return
-
-    void update(traderRefFor(address), { name }).catch((error) => {
-      console.error('Failed to update trader name:', error)
-    })
-  }, [address, authenticated, name, ready])
+    arenaRealtime().setAuth(token, wallet)
+  }, [token, wallet])
 }
 
-export function usePublishTraderHeartRate(bpm: number | null, live: boolean) {
-  const { ready, authenticated, user } = usePrivy()
-  const address = user?.wallet?.address || user?.id || ''
+/**
+ * Broadcasts the live wearable bpm over WS `heart` (throttled to one frame per 2 s) and, once setup has a
+ * session key, writes it on-chain with `report_heart` at most every 5 s. Calm pulse pays from the on-chain value.
+ */
+export function usePublishTraderHeartRate(bpm: number | null, live: boolean): HeartChainReport {
+  const { token } = useArenaAuth()
+  const { connections, instructions } = useArenaChain()
+  const { session, owner } = useArenaSession()
+  const value = live ? bpm : null
+  const valueRef = useRef(value)
+  const [report, setReport] = useState<HeartChainReport>(emptyHeartReport)
 
   useEffect(() => {
-    if (!ready || !authenticated || !address) return
+    valueRef.current = value
+  }, [value])
 
-    const db = getFirebaseDatabase()
-    const traderRef = traderRefFor(address)
-    const disconnectHeartRate = onDisconnect(ref(db, `${TRADERS_PATH}/${traderKey(address)}/heartRate`))
-    const disconnectHeartRateAt = onDisconnect(ref(db, `${TRADERS_PATH}/${traderKey(address)}/heartRateAt`))
+  useEffect(() => {
+    if (!token) return
+    arenaRealtime().publishHeart(value)
+  }, [token, value])
 
-    void Promise.all([disconnectHeartRate.remove(), disconnectHeartRateAt.remove()]).catch((error) => {
-      console.error('Failed to arm trader heart rate disconnect:', error)
-    })
+  useEffect(() => {
+    if (!token) return
+    return () => arenaRealtime().publishHeart(null)
+  }, [token])
 
-    return () => {
-      void disconnectHeartRate.cancel()
-      void disconnectHeartRateAt.cancel()
-      void update(traderRef, traderHeartRateUpdate(null)).catch((error) => {
-        console.error('Failed to clear trader heart rate:', error)
-      })
+  useEffect(() => {
+    if (!live || !session || !owner) return
+
+    let stopped = false
+    let sending = false
+    const signer = keypairSigner(session.keypair as unknown as Parameters<typeof keypairSigner>[0])
+    const ownerKey = new PublicKey(owner)
+
+    const send = async () => {
+      const current = valueRef.current
+      if (sending || current == null) return
+      const rounded = Math.round(current)
+      // A reading outside the program's accepted range is a wearable glitch; it is not written.
+      if (rounded < HEART_BPM_MIN || rounded > HEART_BPM_MAX) return
+
+      sending = true
+      try {
+        const instruction = await instructions.reportHeart(session.keypair.publicKey, ownerKey, rounded, session.token)
+        const sent = await sendErTransaction(connections.er, [instruction], signer)
+        if (!stopped) setReport({ signature: sent.signature, ms: sent.ms, error: null })
+      } catch (error) {
+        if (!stopped) setReport({ signature: null, ms: null, error: `On-chain heart report failed: ${errorMessage(error)}` })
+      } finally {
+        sending = false
+      }
     }
-  }, [address, authenticated, ready])
 
-  useEffect(() => {
-    if (!ready || !authenticated || !address) return
+    void send()
+    const timer = window.setInterval(() => void send(), HEART_CHAIN_INTERVAL_MS)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [connections, instructions, live, owner, session])
 
-    void update(traderRefFor(address), traderHeartRateUpdate(live ? bpm : null)).catch((error) => {
-      console.error('Failed to publish trader heart rate:', error)
-    })
-  }, [address, authenticated, bpm, live, ready])
+  return live && session ? report : emptyHeartReport
 }
 
 export function useTraders() {
-  const [raw, setRaw] = useState<unknown>(null)
+  const dtos = useArenaRealtime((state) => state.traders)
+  const anonymous = useArenaRealtime((state) => state.anonymous)
+  const online = useArenaRealtime((state) => state.online)
+  const serverTimeOffsetMs = useArenaRealtime((state) => state.serverTimeOffsetMs)
+  const snapshotStatus = useArenaRealtime((state) => state.snapshotStatus)
   const [now, setNow] = useState(() => Date.now())
-  const [status, setStatus] = useState<TradersStatus>('loading')
-
-  useEffect(() => {
-    const unsubscribe = onValue(
-      ref(getFirebaseDatabase(), TRADERS_PATH),
-      (next) => {
-        setRaw(next.val())
-        setNow(Date.now())
-        setStatus('live')
-      },
-      () => {
-        setStatus('error')
-      },
-    )
-
-    return unsubscribe
-  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), PRESENCE_HEARTBEAT_MS)
     return () => clearInterval(timer)
   }, [])
 
-  const snapshot = parseTraders(raw, now)
+  const traders = useMemo(
+    () =>
+      dtos
+        .map((dto) => traderFromDto(dto, serverTimeOffsetMs))
+        .sort((left, right) => left.address.localeCompare(right.address) || left.name.localeCompare(right.name)),
+    [dtos, serverTimeOffsetMs],
+  )
+
+  const status: TradersStatus = snapshotStatus === 'ready' ? 'live' : snapshotStatus === 'error' ? 'error' : 'loading'
 
   return {
-    traders: snapshot.traders,
-    anonymous: snapshot.anonymous,
-    online: onlineTraderCount(snapshot, now),
+    traders,
+    anonymous,
+    online,
     status,
     now,
   }

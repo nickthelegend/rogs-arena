@@ -1,50 +1,31 @@
 'use client'
 
-import { getFirebaseDatabase } from '@/lib/firebase'
-import { isMarketTrade, type MarketTrade } from '@/lib/market-trades'
-import { onValue, ref } from 'firebase/database'
-import { useEffect, useState } from 'react'
-
-type TradesStatus = 'loading' | 'live' | 'error'
+import { requestRoundData, roundDataStatus, roundIdsFromMarketIds, useArenaRealtime } from '@/lib/arena-realtime'
+import { marketTradeFromDto, type MarketTrade } from '@/lib/market-trades'
+import { useEffect, useMemo } from 'react'
 
 const emptyTrades: MarketTrade[] = []
 
+/** `marketIds` are round ids as decimal strings (the arena market id). */
 export function useMarketTrades(marketIds: string[]) {
-  const [trades, setTrades] = useState<MarketTrade[]>([])
-  const [status, setStatus] = useState<TradesStatus>('loading')
-  const filterKey = marketIds.map((id) => id.toLowerCase()).join('|')
+  const filterKey = roundIdsFromMarketIds(marketIds).join('|')
+  const roundIds = useMemo(() => (filterKey ? filterKey.split('|').map(Number) : []), [filterKey])
+  const byRound = useArenaRealtime((state) => state.trades)
+  const loads = useArenaRealtime((state) => state.loads)
 
   useEffect(() => {
-    if (!filterKey) return
+    for (const roundId of roundIds) requestRoundData('trades', roundId)
+  }, [loads, roundIds])
 
-    const allowed = new Set(filterKey.split('|'))
-    const unsubscribe = onValue(
-      ref(getFirebaseDatabase(), 'trades'),
-      (snapshot) => {
-        const raw = snapshot.val() as Record<string, unknown> | null
-        const next = raw
-          ? Object.entries(raw).flatMap(([id, value]) => {
-              if (!isMarketTrade(id, value)) return []
-              const marketId = value.marketId?.toLowerCase()
-              if (!marketId || !allowed.has(marketId)) return []
-              return [{ id, ...value }]
-            })
-          : []
-
-        next.sort((left, right) => left.t - right.t || left.id.localeCompare(right.id))
-        setTrades(next)
-        setStatus('live')
-      },
-      () => {
-        setStatus('error')
-      },
-    )
-
-    return unsubscribe
-  }, [filterKey])
+  const trades = useMemo(() => {
+    if (roundIds.length === 0) return emptyTrades
+    const next = roundIds.flatMap((roundId) => (byRound[roundId] ?? []).map(marketTradeFromDto))
+    next.sort((left, right) => left.t - right.t || left.id.localeCompare(right.id))
+    return next
+  }, [byRound, roundIds])
 
   return {
-    trades: filterKey ? trades : emptyTrades,
-    status: filterKey ? status : 'live',
+    trades,
+    status: roundDataStatus(loads, 'trades', roundIds),
   }
 }

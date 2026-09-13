@@ -1,51 +1,35 @@
 import { createEnv } from '@t3-oss/env-nextjs'
 import { z } from 'zod'
 
+const base58Key = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'must be a base58 public key')
+const httpUrl = z.url({ protocol: /^https?$/ })
+const wsUrl = z.url({ protocol: /^wss?$/ })
+
+// Client-only configuration. Validation runs here; nothing (connections, clients, sockets) is constructed at import.
 export const env = createEnv({
-  server: {
-    PRIVY_APP_SECRET: z.string().min(1),
-    AUTHORIZATION_PRIVATE_KEY: z.string().min(1),
-
-    DATABASE_URL: z.url(),
-
-    SOMNIA_PRIVATE_KEY: z.string().min(1),
-  },
   client: {
-    NEXT_PUBLIC_PRIVY_CLIENT_ID: z.string().min(1),
-    NEXT_PUBLIC_PRIVY_APP_ID: z.string().min(1),
-
-    NEXT_PUBLIC_AUTHORIZATION_ID: z.string().min(1),
-    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1),
-
-    NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_DATABASE_URL: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1),
-    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: z.string().min(1),
+    NEXT_PUBLIC_SOLANA_CLUSTER: z.enum(['devnet']),
+    NEXT_PUBLIC_BASE_RPC_URL: httpUrl,
+    NEXT_PUBLIC_ROUTER_URL: httpUrl,
+    NEXT_PUBLIC_ER_RPC_URL: httpUrl,
+    NEXT_PUBLIC_ER_WS_URL: wsUrl,
+    NEXT_PUBLIC_ER_VALIDATOR: base58Key,
+    NEXT_PUBLIC_PROGRAM_ID: base58Key,
+    NEXT_PUBLIC_ORACLE_BTC_FEED: base58Key,
+    NEXT_PUBLIC_ARENA_API_URL: httpUrl,
+    NEXT_PUBLIC_ARENA_WS_URL: wsUrl,
   },
-  runtimeEnv: {
-    PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
-    AUTHORIZATION_PRIVATE_KEY: process.env.AUTHORIZATION_PRIVATE_KEY,
-    DATABASE_URL: process.env.DATABASE_URL,
-
-    NEXT_PUBLIC_PRIVY_CLIENT_ID: process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID,
-    NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
-    NEXT_PUBLIC_AUTHORIZATION_ID: process.env.NEXT_PUBLIC_AUTHORIZATION_ID,
-    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-
-    NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    NEXT_PUBLIC_FIREBASE_DATABASE_URL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-
-    SOMNIA_PRIVATE_KEY: process.env.SOMNIA_PRIVATE_KEY,
+  experimental__runtimeEnv: {
+    NEXT_PUBLIC_SOLANA_CLUSTER: process.env.NEXT_PUBLIC_SOLANA_CLUSTER,
+    NEXT_PUBLIC_BASE_RPC_URL: process.env.NEXT_PUBLIC_BASE_RPC_URL,
+    NEXT_PUBLIC_ROUTER_URL: process.env.NEXT_PUBLIC_ROUTER_URL,
+    NEXT_PUBLIC_ER_RPC_URL: process.env.NEXT_PUBLIC_ER_RPC_URL,
+    NEXT_PUBLIC_ER_WS_URL: process.env.NEXT_PUBLIC_ER_WS_URL,
+    NEXT_PUBLIC_ER_VALIDATOR: process.env.NEXT_PUBLIC_ER_VALIDATOR,
+    NEXT_PUBLIC_PROGRAM_ID: process.env.NEXT_PUBLIC_PROGRAM_ID,
+    NEXT_PUBLIC_ORACLE_BTC_FEED: process.env.NEXT_PUBLIC_ORACLE_BTC_FEED,
+    NEXT_PUBLIC_ARENA_API_URL: process.env.NEXT_PUBLIC_ARENA_API_URL,
+    NEXT_PUBLIC_ARENA_WS_URL: process.env.NEXT_PUBLIC_ARENA_WS_URL,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

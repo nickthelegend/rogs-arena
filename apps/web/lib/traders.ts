@@ -1,3 +1,4 @@
+import type { TraderDto } from '@/lib/arena-api'
 import { formatAddress } from '@/lib/format'
 import { ANONYMOUS_FIELD, PRESENCE_TTL_MS } from '@repo/shared/firebase-path'
 
@@ -110,6 +111,26 @@ function parseTrader(value: Trader): Trader {
     ...(sessions ? { sessions } : {}),
     ...(heartRate != null ? { heartRate } : {}),
     ...(heartRateAt != null ? { heartRateAt } : {}),
+  }
+}
+
+/**
+ * Maps a presence row from the arena service. Server timestamps are shifted by the measured clock offset
+ * (serverTime - local receive time) so freshness checks compare against this browser's clock.
+ */
+export function traderFromDto(dto: TraderDto, serverTimeOffsetMs = 0): Trader {
+  const heartRate = parseHeartRateBpm(dto.heartRate)
+  const heartRateAt =
+    typeof dto.heartRateAt === 'number' && Number.isFinite(dto.heartRateAt)
+      ? dto.heartRateAt - serverTimeOffsetMs
+      : undefined
+
+  return {
+    address: dto.address,
+    name: dto.name || formatAddress(dto.address),
+    status: dto.status,
+    ...(Number.isFinite(dto.lastSeen) ? { lastSeen: dto.lastSeen - serverTimeOffsetMs } : {}),
+    ...(heartRate != null && heartRateAt != null ? { heartRate, heartRateAt } : {}),
   }
 }
 

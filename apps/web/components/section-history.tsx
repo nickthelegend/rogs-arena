@@ -1,7 +1,7 @@
 'use client'
 
 import { useMarketHistory } from '@/hooks/use-market-history'
-import { formatGmt7Hm } from '@/lib/format'
+import { formatLocalHm } from '@/lib/format'
 import { type HistoryOutcome } from '@/lib/market-history'
 import { NO_COLOR, YES_COLOR } from '@/lib/outcome'
 import { cn } from 'cn'
@@ -14,7 +14,6 @@ type Point = {
 
 const stepMs = 5 * 60 * 1000
 const hourMs = 60 * 60 * 1000
-const gmt7OffsetMs = 7 * hourMs
 const windowMs = 1 * 60 * 60 * 1000
 const itemsPerRow = 6
 const rowHeight = 90
@@ -117,20 +116,22 @@ type Item = {
   outcome: HistoryOutcome | null
 }
 
-function startOfHourGmt7(ms: number) {
-  return Math.floor((ms + gmt7OffsetMs) / hourMs) * hourMs - gmt7OffsetMs
+function startOfLocalHour(ms: number) {
+  const date = new Date(ms)
+  date.setMinutes(0, 0, 0)
+  return date.getTime()
 }
 
 function generateTimeSlots(now: number): Item[] {
   const aligned = Math.floor(now / stepMs) * stepMs
-  const start = startOfHourGmt7(aligned - windowMs)
-  const end = startOfHourGmt7(aligned + windowMs) + hourMs - stepMs
+  const start = startOfLocalHour(aligned - windowMs)
+  const end = startOfLocalHour(aligned + windowMs) + hourMs - stepMs
   const slots: Item[] = []
 
   for (let time = start; time <= end; time += stepMs) {
     slots.push({
       time,
-      label: formatGmt7Hm(time),
+      label: formatLocalHm(time),
       isCurrent: time === aligned,
       isPast: time < aligned,
       outcome: null,

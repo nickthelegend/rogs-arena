@@ -1,21 +1,12 @@
 'use client'
 
+import { useBtcPrice } from '@/hooks/use-btc-price'
 import { useCurrentMarket } from '@/hooks/use-current-market'
-import { BTC_ASSET, BTC_COLOR, BTC_PRICE_TICKS, BTC_PRICE_WINDOWS } from '@/lib/btc'
-import { createDreamDexExchange } from '@/lib/dreamdex'
+import { BTC_COLOR, BTC_PRICE_WINDOWS } from '@/lib/btc'
 import { formatChange, formatChartTime, formatUsd } from '@/lib/format'
 import { Liveline } from '@/lib/liveline'
-import { interpolateAtTime } from '@/lib/liveline/math/interpolate'
-import { NO_COLOR, YES_COLOR } from '@/lib/outcome'
-import {
-  candleWidthForWindow,
-  livePriceToPoint,
-  normalizePricePoints,
-  pointsToCandles,
-  tickToLivelinePoint,
-} from '@/lib/utils'
-import { isBinaryMarket } from '@somnia-chain/markets-sdk'
-import { SomniaMarketsProvider, useLivePrice, useLivePriceTicks, useWatchPrice } from '@somnia-chain/markets-sdk/react'
+import { candleWidthForWindow, pointsToCandles } from '@/lib/utils'
+import { rawPriceToNumber } from '@rogs/arena-sdk'
 import { useMemo, useState } from 'react'
 
 const defaultWindowSecs = BTC_PRICE_WINDOWS[0]?.secs ?? 60
@@ -24,34 +15,24 @@ function BtcPriceFeed() {
   const { market } = useCurrentMarket()
   const [chartMode, setChartMode] = useState<'line' | 'candle'>('line')
   const [windowSecs, setWindowSecs] = useState(defaultWindowSecs)
-  const priceStatus = useWatchPrice(BTC_ASSET)
-  const btcPrice = useLivePrice(BTC_ASSET)
-  const btcPriceTicks = useLivePriceTicks(BTC_ASSET, BTC_PRICE_TICKS)
-  const btcPricePoints = useMemo(() => {
-    const points = btcPriceTicks.map(tickToLivelinePoint)
-    if (btcPrice) points.push(livePriceToPoint(btcPrice))
-    return normalizePricePoints(points)
-  }, [btcPrice, btcPriceTicks])
+  const { latest, points: btcPricePoints, status: priceStatus, error: priceError } = useBtcPrice()
   const candleWidth = candleWidthForWindow(windowSecs)
   const { candles, liveCandle } = useMemo(
     () => pointsToCandles(btcPricePoints, candleWidth),
     [btcPricePoints, candleWidth],
   )
+  // The round's strike is the oracle price the program read on-chain when the round opened.
   const marketOpenPrice = useMemo(() => {
-    if (!market || !isBinaryMarket(market.info)) return undefined
-
-    const tradingStart = Number(market.info.tradingStart)
-    if (!Number.isFinite(tradingStart)) return undefined
-
-    return interpolateAtTime(btcPricePoints, tradingStart) ?? undefined
-  }, [btcPricePoints, market])
+    if (!market || market.strikePrice <= 0n) return undefined
+    return rawPriceToNumber(market.strikePrice, market.priceExpo)
+  }, [market])
   const marketReferenceLine = useMemo(
     () => (marketOpenPrice == null ? undefined : { value: marketOpenPrice, label: formatUsd(marketOpenPrice) }),
     [marketOpenPrice],
   )
   const isLoadingBtcPrice = priceStatus === 'hydrating' && btcPricePoints.length === 0
   const first = btcPricePoints.at(0)
-  const latestValue = btcPrice?.price ?? btcPricePoints.at(-1)?.value
+  const latestValue = latest?.price ?? btcPricePoints.at(-1)?.value
   const change = first && latestValue !== undefined ? latestValue - first.value : undefined
   const changePercent = change !== undefined && first && first.value !== 0 ? change / first.value : undefined
   const changeTone = change === undefined ? '#6A7374' : change >= 0 ? '#31DC0E' : '#DC220E'
@@ -92,7 +73,7 @@ function BtcPriceFeed() {
             lineData={btcPricePoints}
             lineValue={latestValue}
             loading={isLoadingBtcPrice}
-            emptyText="Waiting for BTC price..."
+            emptyText={priceError ?? 'Waiting for BTC price...'}
             formatValue={formatUsd}
             formatTime={formatChartTime}
             tooltip={false}
@@ -112,11 +93,5 @@ function BtcPriceFeed() {
 }
 
 export default function SectionChartBtc() {
-  const exchange = useMemo(() => createDreamDexExchange(), [])
-
-  return (
-    <SomniaMarketsProvider client={exchange.client}>
-      <BtcPriceFeed />
-    </SomniaMarketsProvider>
-  )
+  return <BtcPriceFeed />
 }

@@ -1,7 +1,9 @@
-import type { PriceFeedStatus } from '@somnia-chain/markets-sdk'
+export type PriceFeedStatus = 'waiting' | 'hydrating' | 'live' | 'error'
 
+/** Base58 addresses are case-sensitive: first 4 + '…' + last 4, never lowercased. */
 export function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
+  if (address.length <= 9) return address
+  return `${address.slice(0, 4)}…${address.slice(-4)}`
 }
 
 export const usdFormatter = new Intl.NumberFormat('en', {
@@ -29,21 +31,22 @@ const dateTimeFormatter = new Intl.DateTimeFormat('en', {
   timeStyle: 'short',
 })
 
-const gmt7Zone = 'Asia/Ho_Chi_Minh'
-
-const gmt7TimeFormatter = new Intl.DateTimeFormat('en-GB', {
+// No timeZone option: these format in the viewer's own local time zone.
+const localTimeFormatter = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
   hour12: false,
-  timeZone: gmt7Zone,
 })
 
-const gmt7HmFormatter = new Intl.DateTimeFormat('en-GB', {
+const localHmFormatter = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
-  timeZone: gmt7Zone,
+})
+
+const localZoneFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZoneName: 'short',
 })
 
 export function formatUsd(value?: number) {
@@ -88,13 +91,16 @@ export function formatUpdateTime(value?: number) {
   return clockFormatter.format(new Date(value))
 }
 
-export function formatGmt7Hm(value: number) {
+export function formatLocalHm(value: number) {
   if (!Number.isFinite(value)) return ''
-  return gmt7HmFormatter.format(new Date(value))
+  return localHmFormatter.format(new Date(value))
 }
 
-export function formatGmt7Time(value: number = Date.now()) {
-  return `${gmt7TimeFormatter.format(new Date(value))} GMT+7`
+export function formatLocalTime(value: number = Date.now()) {
+  const date = new Date(value)
+  const time = localTimeFormatter.format(date)
+  const zone = localZoneFormatter.formatToParts(date).find((part) => part.type === 'timeZoneName')?.value
+  return zone ? `${time} ${zone}` : time
 }
 
 export function formatDate(value: Date | number | string) {
@@ -125,5 +131,6 @@ export function formatCents(price: number) {
 export function priceStatusLabel(status: PriceFeedStatus, lastUpdateMs?: number) {
   if (status === 'live') return `Live ${formatUpdateTime(lastUpdateMs)}`
   if (status === 'hydrating') return 'Syncing'
+  if (status === 'error') return 'Feed error'
   return 'Waiting'
 }

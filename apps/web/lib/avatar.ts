@@ -3,7 +3,7 @@ import frames from './frames.json'
 
 function hashAddress(address: string) {
   let hash = 2166136261
-  const seed = address.trim().toLowerCase()
+  const seed = address.trim()
   for (let i = 0; i < seed.length; i++) {
     hash ^= seed.charCodeAt(i)
     hash = Math.imul(hash, 16777619)

@@ -1,6 +1,6 @@
 export const HEART_RATE_SERVICE_UUID = 'heart_rate'
 export const HEART_RATE_MEASUREMENT_UUID = 'heart_rate_measurement'
-export const HEART_RATE_DEVICE_STORAGE_KEY = 'rizz.heartRateDevice'
+export const HEART_RATE_DEVICE_STORAGE_KEY = 'rogs.heartRateDevice'
 
 export const HEART_RATE_REQUEST_OPTIONS = {
   filters: [{ services: [HEART_RATE_SERVICE_UUID] }],

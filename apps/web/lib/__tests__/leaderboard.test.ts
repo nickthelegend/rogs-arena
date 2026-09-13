@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import bs58 from 'bs58'
 import {
   advanceLeaderboardHold,
   floatingProfitForTrader,
@@ -15,11 +16,16 @@ import {
 import type { MarketTrade } from '../market-trades'
 import type { Trader } from '../traders'
 
+/** A distinct, valid base58 32-byte address per index. */
+function generatedWallet(index: number) {
+  return bs58.encode(Uint8Array.from({ length: 32 }, (_, byte) => (byte === 0 ? index + 1 : 7)))
+}
+
 function trade(overrides: Partial<MarketTrade> = {}): MarketTrade {
   return {
     id: '1',
     t: 1,
-    taker: '0x1111111111111111111111111111111111111111',
+    taker: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
     outcome: 'YES',
     side: 'BUY_YES',
     amount: 100,
@@ -113,7 +119,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-buy',
           t: 1,
-          taker: '0x2222222222222222222222222222222222222222',
+          taker: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
           amount: 100,
           price: 0.8,
           cost: 80,
@@ -121,7 +127,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-sell',
           t: 2,
-          taker: '0x2222222222222222222222222222222222222222',
+          taker: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
           side: 'SELL_YES',
           amount: 100,
           price: 0.5,
@@ -134,7 +140,7 @@ describe('toLeaderboardItems', () => {
 
     expect(items.map((item) => item.status)).toEqual(['open', 'closed'])
     expect(items[1]).toMatchObject({
-      trader: '0x2222222222222222222222222222222222222222',
+      trader: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
       exit: 'sl',
       profit: -30,
     })
@@ -146,7 +152,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'loser',
           t: 1,
-          taker: '0x2222222222222222222222222222222222222222',
+          taker: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
           amount: 100,
           price: 0.8,
           cost: 80,
@@ -154,7 +160,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'winner',
           t: 2,
-          taker: '0x3333333333333333333333333333333333333333',
+          taker: 'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu',
           amount: 100,
           price: 0.2,
           cost: 20,
@@ -162,7 +168,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-buy',
           t: 3,
-          taker: '0x4444444444444444444444444444444444444444',
+          taker: 'MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57',
           amount: 100,
           price: 0.2,
           cost: 20,
@@ -170,7 +176,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-sell',
           t: 4,
-          taker: '0x4444444444444444444444444444444444444444',
+          taker: 'MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57',
           side: 'SELL_YES',
           amount: 100,
           price: 0.9,
@@ -181,9 +187,9 @@ describe('toLeaderboardItems', () => {
     )
 
     expect(items.map((item) => item.trader)).toEqual([
-      '0x4444444444444444444444444444444444444444',
-      '0x3333333333333333333333333333333333333333',
-      '0x2222222222222222222222222222222222222222',
+      'MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57',
+      'ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu',
+      '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
     ])
     expect(items[0]).toMatchObject({ status: 'closed', exit: 'tp', profit: 70 })
     expect(items[1]).toMatchObject({ status: 'open', profit: 30 })
@@ -195,7 +201,7 @@ describe('toLeaderboardItems', () => {
       trade({
         id: `t${index}`,
         t: index + 1,
-        taker: `0x${index.toString(16).padStart(40, '0')}`,
+        taker: generatedWallet(index),
         amount: 100,
         price: 0.2 + index * 0.01,
         cost: 20 + index,
@@ -212,7 +218,7 @@ describe('toLeaderboardItems', () => {
       trade({
         id: `open-${index}`,
         t: index + 1,
-        taker: `0x${(index + 1).toString(16).padStart(40, '0')}`,
+        taker: generatedWallet(index + 1),
         amount: 100,
         price: 0.49,
         cost: 49,
@@ -225,7 +231,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-buy',
           t: 20,
-          taker: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          taker: 'J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q',
           amount: 100,
           price: 0.2,
           cost: 20,
@@ -233,7 +239,7 @@ describe('toLeaderboardItems', () => {
         trade({
           id: 'closed-sell',
           t: 21,
-          taker: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          taker: 'J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q',
           side: 'SELL_YES',
           amount: 100,
           price: 0.8,
@@ -245,7 +251,7 @@ describe('toLeaderboardItems', () => {
 
     expect(items).toHaveLength(LEADERBOARD_LIMIT)
     expect(items[0]).toMatchObject({
-      trader: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      trader: 'J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q',
       status: 'closed',
       exit: 'tp',
       profit: 60,
@@ -258,13 +264,13 @@ describe('toLeaderboardItems', () => {
       { yes: 0.5 },
     )
 
-    expect(Object.keys(byId(items))).toEqual(['0x1111111111111111111111111111111111111111:YES'])
+    expect(Object.keys(byId(items))).toEqual(['Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr:YES'])
   })
 })
 
 describe('withTraderData', () => {
   const now = 1_000_000
-  const address = '0x1111111111111111111111111111111111111111'
+  const address = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
 
   function roster(overrides: Partial<Trader> = {}): Trader {
     return {
@@ -286,23 +292,24 @@ describe('withTraderData', () => {
     })
   })
 
-  test('matches mixed-case wallet addresses', () => {
-    const [row] = toLeaderboardItems([trade()], { yes: 0.5 })
-    const [item] = withTraderData(
-      [row!],
-      [roster({ address: '0x1111111111111111111111111111111111111111'.toUpperCase(), name: 'kira' })],
+  test('does not merge base58 wallets that differ only by case', () => {
+    const items = toLeaderboardItems([trade()], { yes: 0.5 })
+    const next = withTraderData(
+      items,
+      [roster({ address: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'.toUpperCase(), name: 'kira' })],
       now,
     )
 
-    expect(item?.name).toBe('kira')
+    expect(next).toBe(items)
+    expect(next[0]?.name).toBe('Ens1…yVvr')
   })
 
   test('keeps the truncated address when the trader is unknown', () => {
     const items = toLeaderboardItems([trade()], { yes: 0.5 })
-    const next = withTraderData(items, [roster({ address: '0x2222222222222222222222222222222222222222' })], now)
+    const next = withTraderData(items, [roster({ address: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr' })], now)
 
     expect(next).toBe(items)
-    expect(next[0]?.name).toBe('0x1111...1111')
+    expect(next[0]?.name).toBe('Ens1…yVvr')
     expect(next[0]?.heartRate).toBeUndefined()
   })
 
@@ -354,7 +361,7 @@ describe('withCloseExits', () => {
       {
         id: 'c1',
         marketId: 'm1',
-        trader: '0x1111111111111111111111111111111111111111',
+        trader: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
         outcome: 'YES',
         exit: 'tp',
         profit: 6.25,
@@ -367,8 +374,8 @@ describe('withCloseExits', () => {
   })
 
   test('re-ranks a closed lot after overlaying a larger firebase pnl', () => {
-    const open = item('0x2222222222222222222222222222222222222222', { profit: 10, status: 'open' })
-    const closed = item('0x1111111111111111111111111111111111111111', {
+    const open = item('71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr', { profit: 10, status: 'open' })
+    const closed = item('Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr', {
       profit: 1,
       status: 'closed',
       exit: 'tp',
@@ -378,7 +385,7 @@ describe('withCloseExits', () => {
       {
         id: 'c1',
         marketId: 'm1',
-        trader: '0x1111111111111111111111111111111111111111',
+        trader: 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
         outcome: 'YES',
         exit: 'tp',
         profit: 40,
@@ -388,8 +395,8 @@ describe('withCloseExits', () => {
     ])
 
     expect(ranked.map((row) => row.trader)).toEqual([
-      '0x1111111111111111111111111111111111111111',
-      '0x2222222222222222222222222222222222222222',
+      'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr',
+      '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
     ])
     expect(ranked[0]).toMatchObject({ status: 'closed', profit: 40 })
   })
@@ -444,7 +451,7 @@ describe('advanceLeaderboardHold', () => {
 })
 
 describe('floatingProfitForTrader', () => {
-  const trader = '0x1111111111111111111111111111111111111111'
+  const trader = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
 
   test('sums open YES and NO mark-to-market for one wallet', () => {
     expect(
@@ -475,7 +482,7 @@ describe('floatingProfitForTrader', () => {
           trade({
             id: 'other',
             t: 2,
-            taker: '0x2222222222222222222222222222222222222222',
+            taker: '71wtTRDY8Gxgw56bXFt2oc6qeAbTxzStdNiC425Z51sr',
             amount: 100,
             price: 0.2,
             cost: 20,

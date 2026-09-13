@@ -8,19 +8,18 @@ import { useTradeSetup } from '@/hooks/use-trade-setup'
 import { useTrading } from '@/hooks/use-trading'
 import { usePublishTraderHeartRate } from '@/hooks/use-traders'
 import { ABILITY_ACCENT, appliedAbilityRelease, islandAbilityMarketToApply } from '@/lib/ability'
-import { binaryMarketId, settleAbilitiesBody } from '@/lib/trading'
+import { binaryMarketId } from '@/lib/trading'
 import {
   canApplyAbilityOnIsland,
   formatBalanceLine,
   islandStageFromSetup,
   shortAddress,
   tradeSetupProgress,
-  tradeWallet,
   type FaucetAsset,
 } from '@/lib/trade-setup'
 import { traderIdentity } from '@/lib/traders'
 import { useIslandStore } from '@/stores/island'
-import { usePrivy } from '@privy-io/react-auth'
+import { ABILITY_NONE } from '@rogs/arena-sdk'
 import { AnimatePresence, useReducedMotion } from 'motion/react'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import AppliedTag from './applied-tag'
@@ -57,15 +56,41 @@ function SetupProgress({ step }: { step: ReturnType<typeof useTradeSetup>['statu
   )
 }
 
+/**
+ * Ability cards are enforced on-chain. A card dropped while you hold a position in the open round is attached
+ * with `attach_ability` right away (before the ability lock). With no position it stays parked and rides on
+ * the next buy. When the round ends, a card that made it on-chain is spent and a parked one returns to the rack.
+ */
 function useReleaseAppliedOnMarketEnd() {
-  const { applied, bound, clearApplied, consumeApplied } = useAbility()
+  const { applied, bound, bindApplied, clearApplied, consumeApplied } = useAbility()
   const { market } = useCurrentMarket()
   const remaining = useMarketCountdown()
-  const { user, getAccessToken } = usePrivy()
-  const walletId = tradeWallet(user)?.id ?? null
+  const { attachAbility, isTrading, positionAbility } = useTrading()
   const marketId = binaryMarketId(market)
   const previousMarketIdRef = useRef<string | null>(null)
   const releasedMarketRef = useRef<string | null>(null)
+  const attemptedCardRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!applied) {
+      attemptedCardRef.current = null
+      return
+    }
+    if (bound || isTrading || positionAbility == null) return
+    if (positionAbility === applied.id) {
+      bindApplied()
+      return
+    }
+    if (positionAbility !== ABILITY_NONE) return
+    if (attemptedCardRef.current === applied.id) return
+    attemptedCardRef.current = applied.id
+
+    const cardId = applied.id
+    void attachAbility(cardId).then((sent) => {
+      if (sent) bindApplied()
+      else clearApplied(cardId)
+    })
+  }, [applied, attachAbility, bindApplied, bound, clearApplied, isTrading, positionAbility])
 
   useEffect(() => {
     const target = islandAbilityMarketToApply({
@@ -78,36 +103,12 @@ function useReleaseAppliedOnMarketEnd() {
     if (releasedMarketRef.current === target) return
     releasedMarketRef.current = target
 
-    const cardId = applied.id
-    const wasBound = bound
-
-    void (async () => {
-      let playCreated = false
-      try {
-        if (!walletId) return
-        const accessToken = await getAccessToken()
-        if (!accessToken) return
-        const response = await fetch('/api/abilities/settle', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(settleAbilitiesBody(walletId, { marketId: target, abilityId: cardId })),
-        })
-        const result = (await response.json().catch(() => null)) as { play?: { id?: string } | null } | null
-        playCreated = Boolean(result?.play?.id)
-      } catch {
-        // Pending plays retry on the next market tick.
-      } finally {
-        if (appliedAbilityRelease({ bound: wasBound, playCreated }) === 'consume') {
-          consumeApplied(cardId)
-        } else {
-          clearApplied(cardId)
-        }
-      }
-    })()
-  }, [applied, bound, clearApplied, consumeApplied, getAccessToken, marketId, remaining, walletId])
+    if (appliedAbilityRelease({ bound, playCreated: false }) === 'consume') {
+      consumeApplied(applied.id)
+    } else {
+      clearApplied(applied.id)
+    }
+  }, [applied, bound, clearApplied, consumeApplied, marketId, remaining])
 }
 
 export default function SectionDynamicIsland() {
@@ -116,7 +117,7 @@ export default function SectionDynamicIsland() {
   const { ready, authenticated, user, status, balances, needs, settled, busy, start, fund, refresh } = useTradeSetup()
   const { canClaim, isClaiming, claimRewards, status: claimStatus } = useTrading()
   const heartRate = useHeartRate()
-  usePublishTraderHeartRate(heartRate.bpm, heartRate.live)
+  const heartChain = usePublishTraderHeartRate(heartRate.bpm, heartRate.live)
   const { islandRef, drag, overIsland, applied, clearApplied, returning } = useAbility()
   useReleaseAppliedOnMarketEnd()
   const zone = useIslandStore((state) => state.zone)
@@ -190,7 +191,10 @@ export default function SectionDynamicIsland() {
   }
 
   const walletBusy = busy || isClaiming
-  const feedback = claimStatus ?? (status.step === 'error' ? { tone: 'error' as const, message: status.detail } : null)
+  const feedback =
+    claimStatus ??
+    (heartChain.error ? { tone: 'error' as const, message: heartChain.error } : null) ??
+    (status.step === 'error' ? { tone: 'error' as const, message: status.detail } : null)
 
   const showDrop = Boolean(drag) && !returning
   const canApply = canApplyAbilityOnIsland(stage)
@@ -224,18 +228,30 @@ export default function SectionDynamicIsland() {
         <AnimatePresence initial={false} mode="wait">
           {stage === 'unconnected' ? (
             <IslandFrame reduceMotion={reduceMotion} stageKey="unconnected">
-              <button
-                type="button"
-                onClick={() => {
-                  setZone('information')
-                  void start()
-                }}
-                disabled={!ready || busy}
-                aria-busy={busy}
-                className="max-w-[440px] rounded-2xl px-8 py-5 text-white transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-wait"
-              >
-                <span className="font-abc-gravity-italic text-[28px] leading-none">{status.title}</span>
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZone('information')
+                    void start('guest')
+                  }}
+                  disabled={!ready || busy}
+                  aria-busy={busy}
+                  className="max-w-[440px] rounded-2xl px-8 py-5 text-white transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-wait"
+                >
+                  <span className="font-abc-gravity-italic text-[28px] leading-none">{status.title}</span>
+                </button>
+                <IslandButton
+                  onClick={() => {
+                    setZone('information')
+                    void start('adapter')
+                  }}
+                  disabled={!ready || busy}
+                  className="bg-white/10 text-white"
+                >
+                  Connect wallet
+                </IslandButton>
+              </div>
             </IslandFrame>
           ) : null}
 
@@ -337,21 +353,21 @@ export default function SectionDynamicIsland() {
                     >
                       {busy && status.step === 'checking_balances' ? 'Refreshing' : 'Refresh'}
                     </IslandButton>
-                    {needs.stt || needs.tusdc || status.step === 'error' ? (
+                    {needs.sol || needs.chips || status.step === 'error' ? (
                       <>
                         <IslandButton
-                          onClick={() => faucet('STT')}
+                          onClick={() => faucet('SOL')}
                           disabled={walletBusy || !status.address}
-                          busy={busy && status.step === 'funding_stt'}
+                          busy={busy && status.step === 'funding_sol'}
                         >
-                          {busy && status.step === 'funding_stt' ? 'Funding STT' : 'Faucet STT'}
+                          {busy && status.step === 'funding_sol' ? 'Funding SOL' : 'Faucet SOL'}
                         </IslandButton>
                         <IslandButton
-                          onClick={() => faucet('tUSDC')}
+                          onClick={() => faucet('CHIPS')}
                           disabled={walletBusy || !status.address}
-                          busy={busy && status.step === 'funding_tusdc'}
+                          busy={busy && status.step === 'claiming_chips'}
                         >
-                          {busy && status.step === 'funding_tusdc' ? 'Funding tUSDC' : 'Faucet tUSDC'}
+                          {busy && status.step === 'claiming_chips' ? 'Claiming chips' : 'Claim chips'}
                         </IslandButton>
                       </>
                     ) : null}

@@ -76,14 +76,12 @@ export function pickCheersRecipients(
   count = CHEERS_RECIPIENT_COUNT,
   random: () => number = Math.random,
 ) {
-  const winnerKey = winner.toLowerCase()
   const pool: string[] = []
   const seen = new Set<string>()
 
   for (const address of addresses) {
-    const key = address.toLowerCase()
-    if (!key || key === winnerKey || seen.has(key)) continue
-    seen.add(key)
+    if (!address || address === winner || seen.has(address)) continue
+    seen.add(address)
     pool.push(address)
   }
 

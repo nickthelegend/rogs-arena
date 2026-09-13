@@ -1,12 +1,13 @@
 'use client'
 
+import { useArenaWallet } from '@/components/arena-wallet-provider'
 import { CHAT_MAX_LENGTH, useChat, type ChatMessage } from '@/hooks/use-chat'
+import { useArenaAuth } from '@/hooks/use-arena-auth'
 import { resolveDisplayName } from '@/lib/display-name'
-import { formatGmt7Hm } from '@/lib/format'
+import { errorMessage } from '@/lib/error'
+import { formatAddress, formatLocalHm } from '@/lib/format'
 import { FramedAvatar } from '@/components/framed-avatar'
 import { getAvatar, getFrame } from '@/lib/avatar'
-import { traderIdentity } from '@/lib/traders'
-import { usePrivy, type User } from '@privy-io/react-auth'
 import { animate } from 'motion'
 import { motion, useReducedMotion } from 'motion/react'
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
@@ -25,31 +26,26 @@ const NEAR_BOTTOM_PX = 48
 const EASE_OUT = [0.23, 1, 0.32, 1] as const
 const ENTER_DURATION = 0.2
 
-function chatIdentity(user: User | null) {
-  if (!user) return null
-  const identity = traderIdentity(user, 'you')
+function chatIdentity(address: string | null) {
+  if (!address) return null
   return {
-    address: identity.address,
-    name: resolveDisplayName(identity.address, identity.name),
+    address,
+    name: resolveDisplayName(address, formatAddress(address)),
   }
 }
 
-function isSelfMessage(message: ChatMessage, user: User | null) {
-  if (!user) return false
-  const keys = [user.wallet?.address, user.id]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.toLowerCase())
-  return keys.includes(message.address.toLowerCase())
+function isSelfMessage(message: ChatMessage, address: string | null) {
+  return Boolean(address) && message.address === address
 }
 
-function toChatItem(message: ChatMessage, user: User | null): ChatItem {
+function toChatItem(message: ChatMessage, address: string | null): ChatItem {
   return {
     id: message.id,
     avatar: getAvatar(message.address || message.id),
     frame: getFrame(message.address || message.id),
     name: message.name,
     message: message.message,
-    side: isSelfMessage(message, user) ? 'right' : 'left',
+    side: isSelfMessage(message, address) ? 'right' : 'left',
     t: message.t,
   }
 }
@@ -95,7 +91,7 @@ function ChatRow({ item, enter }: { item: ChatItem; enter: boolean }) {
               dateTime={new Date(item.t).toISOString()}
               className="shrink-0 font-sans text-xs tabular-nums text-[#6A7374]"
             >
-              {formatGmt7Hm(item.t)}
+              {formatLocalHm(item.t)}
             </time>
           </div>
         </div>
@@ -105,9 +101,12 @@ function ChatRow({ item, enter }: { item: ChatItem; enter: boolean }) {
 }
 
 export default function SectionChat() {
-  const { ready, authenticated, user, login } = usePrivy()
+  const { ready, publicKey, connect } = useArenaWallet()
+  const auth = useArenaAuth()
+  const address = publicKey?.toBase58() ?? null
+  const authenticated = Boolean(auth.token)
   const { messages, initialIds, send } = useChat()
-  const items = messages.map((message) => toChatItem(message, user ?? null))
+  const items = messages.map((message) => toChatItem(message, address))
   const scrollerRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
   const programmaticScrollRef = useRef(false)
@@ -117,6 +116,8 @@ export default function SectionChat() {
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const canSubmit = draft.trim().length > 0 && !sending && ready
+  const [chatError, setChatError] = useState<string | null>(null)
+  const placeholder = chatError ?? (!address ? 'Connect wallet to chat' : authenticated ? "What's that" : 'Sign in to chat')
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
@@ -173,12 +174,25 @@ export default function SectionChat() {
           event.preventDefault()
           if (!ready || sending) return
 
-          if (!authenticated || !user) {
-            login()
+          if (!address) {
+            connect()
             return
           }
 
-          const identity = chatIdentity(user)
+          if (!authenticated) {
+            setSending(true)
+            try {
+              await auth.signIn()
+              setChatError(null)
+            } catch (error) {
+              setChatError(`Sign-in failed: ${errorMessage(error)}`)
+            } finally {
+              setSending(false)
+            }
+            return
+          }
+
+          const identity = chatIdentity(address)
           const message = draft.trim()
           if (!identity || !message) return
 
@@ -193,9 +207,10 @@ export default function SectionChat() {
               name: identity.name,
               message,
             })
+            setChatError(null)
           } catch (error) {
             setDraft(message)
-            console.error(error)
+            setChatError(`Message not sent: ${errorMessage(error)}`)
           } finally {
             setSending(false)
             inputRef.current?.focus()
@@ -206,12 +221,17 @@ export default function SectionChat() {
         <input
           ref={inputRef}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setChatError(null)
+          }}
           maxLength={CHAT_MAX_LENGTH}
           autoComplete="off"
           disabled={!ready}
           className="w-full rounded-lg bg-transparent p-4 text-white/80 disabled:opacity-50"
-          placeholder={authenticated ? "What's that" : 'Sign in to chat'}
+          placeholder={placeholder}
+          title={chatError ?? undefined}
+          aria-invalid={chatError ? true : undefined}
         />
         <button
           type="submit"

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { closeKey, firebaseKey, traderKey } from '../firebase-path'
 
+const wallet = 'Ens1TxKQ99BeYH9yPZTw2wJs1j156oMdYs9iBhenyVvr'
+
 describe('firebaseKey', () => {
   test('strips firebase-forbidden characters without changing case', () => {
     expect(firebaseKey('100_1')).toBe('100_1')
@@ -9,13 +11,19 @@ describe('firebaseKey', () => {
 })
 
 describe('traderKey', () => {
-  test('lowercases and strips firebase-forbidden characters', () => {
-    expect(traderKey('0xAbC.def#1$[x]/Y')).toBe('0xabc_def_1__x__y')
+  test('keeps a base58 wallet exactly as written', () => {
+    expect(traderKey(wallet)).toBe(wallet)
+    expect(traderKey(wallet)).not.toBe(traderKey(wallet.toLowerCase()))
+  })
+
+  test('strips firebase-forbidden characters without lowercasing', () => {
+    expect(traderKey('AbC.def#1$[x]/Y')).toBe('AbC_def_1__x__Y')
   })
 })
 
 describe('closeKey', () => {
-  test('joins market, trader, and outcome into a firebase-safe id', () => {
-    expect(closeKey('0xAb/C', '0xDeF', 'YES')).toBe('0xab_c_0xdef_YES')
+  test('joins round, trader, and outcome into a case-preserving key', () => {
+    expect(closeKey('42', wallet, 'YES')).toBe(`42_${wallet}_YES`)
+    expect(closeKey('4/2', 'AbC', 'NO')).toBe('4_2_AbC_NO')
   })
 })
