@@ -167,8 +167,10 @@ function AbilityCard({ card, index, reduceMotion }: { card: AbilityCardData; ind
           }
           flip()
         }}
-        className={`relative h-full aspect-[376/536] touch-none bg-transparent p-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] motion-reduce:transition-none ${
-          revealed ? 'cursor-grab' : 'cursor-pointer'
+        // A face-down card only flips, so a touch on it can still scroll the page and the rack. A revealed card
+        // takes the whole gesture, since dragging it is how it reaches the island.
+        className={`relative h-full aspect-[376/536] bg-transparent p-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] motion-reduce:transition-none ${
+          revealed ? 'cursor-grab touch-none' : 'cursor-pointer touch-manipulation'
         }`}
       >
         {reduceMotion ? (

@@ -22,8 +22,8 @@ function notifyDisplayNames() {
 
 function defaultDisplayNameStorage(): DisplayNameStorage | null {
   try {
-    if (typeof localStorage === 'undefined') return null
-    return localStorage
+    if (typeof window === 'undefined') return null
+    return window.localStorage
   } catch {
     return null
   }

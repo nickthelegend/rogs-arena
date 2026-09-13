@@ -78,8 +78,7 @@ export function drawOrderbook(
   if (maxSize === 0) return
 
   // Measure orderbook churn: how much total size changed since last frame
-  // Normalized by the total size so it's scale-independent
-  const totalSize = bidTotal + askTotal
+  // Normalized by the previous total size so it's scale-independent
   const prevTotal = state.prevBidTotal + state.prevAskTotal
   let churnSignal = 0
   if (prevTotal > 0) {

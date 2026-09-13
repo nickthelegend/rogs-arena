@@ -1,9 +1,9 @@
 'use client'
 
 import AbilityCardFace from '@/components/ability-card-face'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { type AbilityDrag } from '@/lib/ability'
 import { motion, useTransform, type MotionValue } from 'motion/react'
-import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 export default function AbilityDragLayer({
@@ -26,11 +26,8 @@ export default function AbilityDragLayer({
     ([nextX, nextY, nextLift]) => `translate(${nextX}px, ${nextY}px) scale(${nextLift})`,
   )
   const tilt = useTransform(rotate, (angle) => `rotate(${angle}deg)`)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // The layer portals into document.body, which only exists once the page has hydrated.
+  const mounted = useHydrated()
 
   if (!mounted || !drag) return null
 

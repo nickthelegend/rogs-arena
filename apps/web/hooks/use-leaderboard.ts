@@ -15,6 +15,7 @@ import {
   type LeaderboardHold,
   type LeaderboardItem,
 } from '@/lib/leaderboard'
+import { isInMarket, marketSymbolOfRound } from '@/lib/markets'
 import { useEffect, useMemo, useState } from 'react'
 
 const emptyHold: LeaderboardHold = { marketKey: '', items: [], epoch: 0 }
@@ -22,7 +23,7 @@ const emptyItems: LeaderboardItem[] = []
 const RESOLUTION_POLL_MS = 3_000
 
 export function useLeaderboard() {
-  const { market, isLoading: isLoadingMarket } = useCurrentMarket()
+  const { market, symbol, isLoading: isLoadingMarket } = useCurrentMarket()
   const marketIds = useMemo(() => currentMarketIds(market), [market])
   const marketKey = marketIds.join('|')
   const { trades, status: tradesStatus } = useMarketTrades(marketIds)
@@ -37,10 +38,12 @@ export function useLeaderboard() {
     [closes, marketKey, no, trades, yes],
   )
 
-  const [view, setView] = useState({ hold: emptyHold, frozen: false })
-  const next = advanceLeaderboardHold(view.hold, marketKey, liveItems)
-  if (next.hold !== view.hold || next.frozen !== view.frozen) {
-    setView(next)
+  const [view, setView] = useState({ hold: emptyHold, frozen: false, symbol })
+  // A coin switch starts a fresh board: the other coin's last round is not "the previous round" of this one.
+  const base = view.symbol === symbol ? view : { hold: emptyHold, frozen: false, symbol }
+  const next = advanceLeaderboardHold(base.hold, marketKey, liveItems)
+  if (next.hold !== view.hold || next.frozen !== view.frozen || view.symbol !== symbol) {
+    setView({ ...next, symbol })
   }
 
   // While the previous round's board is held, fetch its outcome so the board shows what positions paid.
@@ -48,11 +51,15 @@ export function useLeaderboard() {
   const [resolved, setResolved] = useState<{ roundId: number; outcome: 'YES' | 'NO' } | null>(null)
   useEffect(() => {
     if (heldRound == null || !Number.isInteger(heldRound) || resolved?.roundId === heldRound) return
+    const heldMarket = marketSymbolOfRound(heldRound)
+    if (!heldMarket) return
     const controller = new AbortController()
     let timer: number | undefined
     const load = async () => {
       try {
-        const round = (await getRounds(5, controller.signal)).find((item) => item.roundId === heldRound)
+        const round = (await getRounds(5, heldMarket, controller.signal)).find(
+          (item) => item.roundId === heldRound && isInMarket(item, heldMarket),
+        )
         if (round?.outcome === 'YES' || round?.outcome === 'NO') {
           setResolved({ roundId: heldRound, outcome: round.outcome })
           return

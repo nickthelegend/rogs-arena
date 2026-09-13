@@ -1,18 +1,24 @@
 'use client'
 
+import { useSelectedMarket } from '@/hooks/use-market-selection'
 import { getRounds } from '@/lib/arena-api'
 import { errorMessage } from '@/lib/error'
 import { HISTORY_PAGE_SIZE, historyOutcomes, type HistoryOutcome } from '@/lib/market-history'
+import { isInMarket, type MarketSymbol } from '@/lib/markets'
 import { useEffect, useState } from 'react'
 
 const historyRefreshMs = 15_000
 const emptyOutcomes: Record<number, HistoryOutcome> = {}
 
+type HistoryView = { symbol: MarketSymbol | null; outcomes: Record<number, HistoryOutcome>; error: string | null }
+
 export function useMarketHistory() {
-  const [outcomes, setOutcomes] = useState<Record<number, HistoryOutcome>>(emptyOutcomes)
-  const [error, setError] = useState<string | null>(null)
+  const { symbol, resolved } = useSelectedMarket()
+  const [view, setView] = useState<HistoryView>({ symbol: null, outcomes: emptyOutcomes, error: null })
 
   useEffect(() => {
+    if (!resolved) return
+
     const controller = new AbortController()
     let loading = false
 
@@ -21,14 +27,18 @@ export function useMarketHistory() {
       loading = true
 
       try {
-        const rounds = await getRounds(HISTORY_PAGE_SIZE, controller.signal)
+        const rounds = await getRounds(HISTORY_PAGE_SIZE, symbol, controller.signal)
         if (controller.signal.aborted) return
-        setOutcomes(historyOutcomes(rounds))
-        setError(null)
+        // A service without market support answers every coin with BTC rounds; those stay off other coins' boards.
+        setView({ symbol, outcomes: historyOutcomes(rounds.filter((round) => isInMarket(round, symbol))), error: null })
       } catch (cause) {
         if (controller.signal.aborted) return
         // Resolved rounds already on the board stay; the failure is reported alongside them.
-        setError(`Could not load round history: ${errorMessage(cause)}`)
+        setView((current) => ({
+          symbol,
+          outcomes: current.symbol === symbol ? current.outcomes : emptyOutcomes,
+          error: `Could not load ${symbol} round history: ${errorMessage(cause)}`,
+        }))
       } finally {
         loading = false
       }
@@ -41,7 +51,8 @@ export function useMarketHistory() {
       controller.abort()
       window.clearInterval(refreshTimer)
     }
-  }, [])
+  }, [resolved, symbol])
 
-  return { outcomes, error }
+  const current = view.symbol === symbol ? view : null
+  return { outcomes: current?.outcomes ?? emptyOutcomes, error: current?.error ?? null }
 }

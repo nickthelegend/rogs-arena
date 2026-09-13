@@ -8,11 +8,13 @@ import {
   createArenaRealtimeStore,
   loadKey,
   parseServerMessage,
+  selectArenaMarket,
   type ArenaRealtimeState,
   type RoundDataKind,
   type RoundDataPayload,
 } from '@/lib/arena-store'
 import { errorMessage } from '@/lib/error'
+import { formatRoundLabel, marketSymbolOfRound, type MarketSymbol } from '@/lib/markets'
 import { PRESENCE_HEARTBEAT_MS } from '@repo/shared/firebase-path'
 import { useStore } from 'zustand'
 
@@ -60,6 +62,8 @@ function heartValue(bpm: number | null) {
 /**
  * The one WebSocket this tab keeps to the arena service. It says `hello` (with the sign-in token when there is
  * one), sends `presence` every 15 s, reconnects with backoff, and folds every server frame into the store.
+ * Nothing opens until the selected coin is known; every broadcast reaches every client, and the store keeps only
+ * the selected coin's rounds, trades, points and closes.
  */
 class ArenaRealtimeClient {
   private socket: WebSocket | null = null
@@ -79,6 +83,9 @@ class ArenaRealtimeClient {
   private heartDirty = false
   private heartSentAt = 0
   private heartTimer: ReturnType<typeof setTimeout> | null = null
+  private market: MarketSymbol | null = null
+  private snapshotMarket: MarketSymbol | null = null
+  private marketsApi = false
 
   retain() {
     this.users += 1
@@ -100,6 +107,34 @@ class ArenaRealtimeClient {
         if (this.users === 0) this.shutdown()
       }, SHUTDOWN_GRACE_MS)
     }
+  }
+
+  /** Scopes round data to one coin: the store drops the previous coin's rows and a snapshot for this one loads. */
+  setMarket(market: MarketSymbol) {
+    if (market === this.market) return
+    this.market = market
+    getArenaRealtimeStore().setState((state) => selectArenaMarket(state, market))
+
+    this.snapshotController?.abort()
+    this.snapshotController = null
+    if (this.snapshotTimer) {
+      clearTimeout(this.snapshotTimer)
+      this.snapshotTimer = null
+    }
+
+    const socket = this.socket
+    // The single-market service answers unknown frames with an error, so the frame only goes to a service that
+    // serves /api/markets. The HTTP snapshot below covers both.
+    if (this.marketsApi && socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'market', market }))
+    }
+    this.open()
+    this.loadSnapshot()
+  }
+
+  /** Set once `/api/markets` answers: that service also understands the `market` WebSocket frame. */
+  setMarketsApi(supported: boolean) {
+    this.marketsApi = supported
   }
 
   setAuth(token: string | null, wallet: string | null) {
@@ -164,6 +199,8 @@ class ArenaRealtimeClient {
   }
 
   requestRoundData(kind: RoundDataKind, roundId: number) {
+    const market = marketSymbolOfRound(roundId)
+    if (!market) return
     const store = getArenaRealtimeStore()
     const key = loadKey(kind, roundId)
     if (store.getState().loads[key]) return
@@ -172,25 +209,33 @@ class ArenaRealtimeClient {
 
     const request: Promise<RoundDataPayload> =
       kind === 'trades'
-        ? getTrades(roundId).then((items) => ({ kind: 'trades', roundId, items }))
+        ? getTrades(roundId, market).then((items) => ({ kind: 'trades', roundId, items }))
         : kind === 'points'
-          ? getPoints(roundId).then((items) => ({ kind: 'points', roundId, items }))
-          : getCloses(roundId).then((items) => ({ kind: 'closes', roundId, items }))
+          ? getPoints(roundId, market).then((items) => ({ kind: 'points', roundId, items }))
+          : getCloses(roundId, market).then((items) => ({ kind: 'closes', roundId, items }))
 
     request.then(
       (payload) => {
         store.setState((state) => {
+          // The coin changed while this was loading; its rows are no longer wanted.
+          if (state.market !== market) return state
           const next = applyRoundData(state, payload)
           return { ...next, loads: { ...next.loads, [key]: { status: 'ready', error: null } } }
         })
       },
       (error: unknown) => {
-        store.setState((state) => ({
-          loads: {
-            ...state.loads,
-            [key]: { status: 'error', error: `Could not load ${kind} for round ${roundId}: ${errorMessage(error)}` },
-          },
-        }))
+        store.setState((state) => {
+          if (state.market !== market) return state
+          return {
+            loads: {
+              ...state.loads,
+              [key]: {
+                status: 'error',
+                error: `Could not load ${kind} for ${formatRoundLabel(roundId)}: ${errorMessage(error)}`,
+              },
+            },
+          }
+        })
         // Dropping the failed entry lets the hooks that still need this round ask again.
         setTimeout(() => {
           store.setState((state) => {
@@ -222,15 +267,17 @@ class ArenaRealtimeClient {
   }
 
   private loadSnapshot() {
-    if (this.snapshotController || this.snapshotTimer || this.users === 0) return
+    const market = this.market
+    if (!market || this.snapshotController || this.snapshotTimer || this.users === 0) return
+    if (this.snapshotMarket === market) return
     const store = getArenaRealtimeStore()
-    if (store.getState().snapshotStatus === 'ready') return
 
     const controller = new AbortController()
     this.snapshotController = controller
-    getArenaSnapshot(controller.signal).then(
+    getArenaSnapshot(market, controller.signal).then(
       (snapshot) => {
         if (this.snapshotController === controller) this.snapshotController = null
+        if (this.market === market) this.snapshotMarket = market
         store.setState((state) => applySnapshot(state, snapshot, Date.now()))
       },
       (error: unknown) => {
@@ -251,7 +298,7 @@ class ArenaRealtimeClient {
   }
 
   private open() {
-    if (this.socket || this.reconnectTimer || this.users === 0) return
+    if (!this.market || this.socket || this.reconnectTimer || this.users === 0) return
 
     const store = getArenaRealtimeStore()
     const url = env.NEXT_PUBLIC_ARENA_WS_URL
@@ -273,7 +320,12 @@ class ArenaRealtimeClient {
       this.helloToken = this.token
       store.setState({ connection: 'open', connectionError: null })
       socket.send(
-        JSON.stringify({ type: 'hello', sessionId: this.tabSessionId(), ...(this.token ? { token: this.token } : {}) }),
+        JSON.stringify({
+          type: 'hello',
+          sessionId: this.tabSessionId(),
+          ...(this.market ? { market: this.market } : {}),
+          ...(this.token ? { token: this.token } : {}),
+        }),
       )
       this.startPresence()
       if (this.heart !== null) this.heartDirty = true

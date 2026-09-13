@@ -122,7 +122,7 @@ export function drawLine(
   const centerY = pad.top + chartH / 2
   const amplitude = chartH * LOADING_AMPLITUDE_RATIO
   const scroll = now_ms * LOADING_SCROLL_SPEED
-  const morphY =
+  const morphY: (rawY: number, x: number) => number =
     chartReveal < 1
       ? (rawY: number, x: number) => {
           const t = Math.max(0, Math.min(1, (x - pad.left) / chartW))
@@ -131,7 +131,7 @@ export function drawLine(
           const baseY = loadingY(t, centerY, amplitude, scroll)
           return baseY + (rawY - baseY) * localReveal
         }
-      : (rawY: number, _x: number) => rawY
+      : (rawY: number) => rawY
 
   const pts: [number, number][] = visible.map((p, i) => {
     const x = toX(p.time)

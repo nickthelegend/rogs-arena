@@ -9,6 +9,7 @@ import type {
   TradeDto,
   TraderDto,
 } from '@/lib/arena-api'
+import { DEFAULT_MARKET, dtoMarket, isInMarket, marketSymbolOfRound, type MarketSymbol } from '@/lib/markets'
 import { createStore } from 'zustand/vanilla'
 
 export const CHAT_KEEP = 50
@@ -48,6 +49,8 @@ export type ArenaRealtimeState = {
   snapshotServerTime: number | null
   serverError: string | null
   serverTimeOffsetMs: number
+  /** The coin `round`, `rounds`, `trades`, `points`, `closes` and `loads` belong to. Everything else is global. */
+  market: MarketSymbol
   round: RoundDto | null
   rounds: RoundDto[]
   traders: TraderDto[]
@@ -58,6 +61,7 @@ export type ArenaRealtimeState = {
   points: Record<number, PointDto[]>
   closes: Record<number, CloseDto[]>
   loads: Record<string, RoundLoad>
+  /** Every coin's settlements: a result in another market still matters to the wallet that holds it. */
   settlements: SettlementDto[]
   cheers: CheersDto[]
 }
@@ -86,6 +90,7 @@ export function initialArenaRealtimeState(): ArenaRealtimeState {
     snapshotServerTime: null,
     serverError: null,
     serverTimeOffsetMs: 0,
+    market: DEFAULT_MARKET,
     round: null,
     rounds: [],
     traders: [],
@@ -150,6 +155,17 @@ export function roundDataError(
     if (load?.status === 'error') return load.error
   }
   return null
+}
+
+/** A row counts for `market` when its ticker (missing means BTC) and its namespaced round id both say so. */
+export function belongsToMarket(item: { market?: string; roundId: number }, market: MarketSymbol) {
+  return isInMarket(item, market) && marketSymbolOfRound(item.roundId) === market
+}
+
+/** Switches the coin round data is kept for. Chat, traders, cheers and settlements are global and stay. */
+export function selectArenaMarket(state: ArenaRealtimeState, market: MarketSymbol): ArenaRealtimeState {
+  if (state.market === market) return state
+  return { ...state, market, round: null, rounds: [], trades: {}, points: {}, closes: {}, loads: {} }
 }
 
 function mergeBy<T>(
@@ -233,16 +249,37 @@ function pruneLoads(loads: Record<string, RoundLoad>, minRoundId: number) {
 export function applySnapshot(state: ArenaRealtimeState, snapshot: ArenaSnapshot, receivedAt: number): ArenaRealtimeState {
   if (state.snapshotServerTime != null && snapshot.serverTime < state.snapshotServerTime) return state
 
+  const withGlobals: ArenaRealtimeState = {
+    ...state,
+    snapshotStatus: 'ready',
+    snapshotError: null,
+    snapshotServerTime: snapshot.serverTime,
+    serverTimeOffsetMs: snapshot.serverTime - receivedAt,
+    traders: snapshot.traders,
+    anonymous: snapshot.anonymous,
+    online: snapshot.online,
+    chat: mergeTimed(state.chat, snapshot.chat).slice(-CHAT_KEEP),
+    cheers: mergeCheers(state.cheers, snapshot.cheers),
+  }
+
+  // Another coin's snapshot (a reply that lost a race with a coin switch, or the single-market service's BTC one)
+  // brings chat, traders and cheers, but leaves this coin's rounds alone.
+  const market = state.market
+  if (dtoMarket(snapshot) !== market) return withGlobals
+
+  const own = <T extends { market?: string; roundId: number }>(items: readonly T[]) =>
+    items.filter((item) => belongsToMarket(item, market))
+
   let trades = state.trades
   let points = state.points
   let closes = state.closes
-  for (const [roundId, items] of groupByRound(snapshot.trades)) {
+  for (const [roundId, items] of groupByRound(own(snapshot.trades))) {
     trades = { ...trades, [roundId]: mergeTimed(trades[roundId], items) }
   }
-  for (const [roundId, items] of groupByRound(snapshot.points)) {
+  for (const [roundId, items] of groupByRound(own(snapshot.points))) {
     points = { ...points, [roundId]: mergePoints(points[roundId], items) }
   }
-  for (const [roundId, items] of groupByRound(snapshot.closes)) {
+  for (const [roundId, items] of groupByRound(own(snapshot.closes))) {
     closes = { ...closes, [roundId]: mergeTimed(closes[roundId], items) }
   }
 
@@ -252,7 +289,8 @@ export function applySnapshot(state: ArenaRealtimeState, snapshot: ArenaSnapshot
     if (load.status === 'loading') loads[key] = load
   }
 
-  const round = snapshot.round
+  const round = snapshot.round && belongsToMarket(snapshot.round, market) ? snapshot.round : null
+  const recentRounds = own(snapshot.recentRounds)
   if (round) {
     for (const kind of roundKinds) loads[loadKey(kind, round.roundId)] = readyLoad
     const minRoundId = round.roundId - ROUND_DATA_KEEP + 1
@@ -262,18 +300,9 @@ export function applySnapshot(state: ArenaRealtimeState, snapshot: ArenaSnapshot
   }
 
   return {
-    ...state,
-    snapshotStatus: 'ready',
-    snapshotError: null,
-    snapshotServerTime: snapshot.serverTime,
-    serverTimeOffsetMs: snapshot.serverTime - receivedAt,
+    ...withGlobals,
     round,
-    rounds: round ? upsertRound(snapshot.recentRounds, round) : snapshot.recentRounds.slice(0, RECENT_ROUNDS_KEEP),
-    traders: snapshot.traders,
-    anonymous: snapshot.anonymous,
-    online: snapshot.online,
-    chat: mergeTimed(state.chat, snapshot.chat).slice(-CHAT_KEEP),
-    cheers: mergeCheers(state.cheers, snapshot.cheers),
+    rounds: round ? upsertRound(recentRounds, round) : recentRounds.slice(0, RECENT_ROUNDS_KEEP),
     trades,
     points,
     closes,
@@ -283,17 +312,22 @@ export function applySnapshot(state: ArenaRealtimeState, snapshot: ArenaSnapshot
 
 export function applyRoundData(state: ArenaRealtimeState, payload: RoundDataPayload): ArenaRealtimeState {
   const { roundId } = payload
+  if (marketSymbolOfRound(roundId) !== state.market) return state
+  const own = <T extends { market?: string; roundId: number }>(items: readonly T[]) =>
+    items.filter((item) => item.roundId === roundId && belongsToMarket(item, state.market))
+
   switch (payload.kind) {
     case 'trades':
-      return { ...state, trades: { ...state.trades, [roundId]: mergeTimed(state.trades[roundId], payload.items) } }
+      return { ...state, trades: { ...state.trades, [roundId]: mergeTimed(state.trades[roundId], own(payload.items)) } }
     case 'points':
-      return { ...state, points: { ...state.points, [roundId]: mergePoints(state.points[roundId], payload.items) } }
+      return { ...state, points: { ...state.points, [roundId]: mergePoints(state.points[roundId], own(payload.items)) } }
     case 'closes':
-      return { ...state, closes: { ...state.closes, [roundId]: mergeTimed(state.closes[roundId], payload.items) } }
+      return { ...state, closes: { ...state.closes, [roundId]: mergeTimed(state.closes[roundId], own(payload.items)) } }
   }
 }
 
 function applyRound(state: ArenaRealtimeState, round: RoundDto): ArenaRealtimeState {
+  if (!belongsToMarket(round, state.market)) return state
   const rounds = upsertRound(state.rounds, round)
   if (state.round && round.roundId < state.round.roundId) return { ...state, rounds }
 
@@ -321,6 +355,7 @@ export function applyServerMessage(
       return { ...state, traders: message.traders, anonymous: message.anonymous, online: message.online }
     case 'chat':
       return { ...state, chat: mergeTimed(state.chat, [message.message]).slice(-CHAT_KEEP) }
+    // Trades, points, closes and rounds are broadcast for every coin; only the selected coin's are kept.
     case 'trade':
       return applyRoundData(state, { kind: 'trades', roundId: message.trade.roundId, items: [message.trade] })
     case 'point':

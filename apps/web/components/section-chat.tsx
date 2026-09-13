@@ -156,7 +156,7 @@ export default function SectionChat() {
   }, [latestId, reduceMotion])
 
   return (
-    <section className="section-panel flex min-h-0 flex-col gap-2 overflow-hidden">
+    <section className="section-panel flex min-h-0 flex-col gap-2 overflow-hidden max-md:h-[420px] max-md:flex-none">
       <div
         ref={scrollerRef}
         onScroll={(event) => {

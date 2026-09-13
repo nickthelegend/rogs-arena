@@ -2,13 +2,20 @@
 
 import { useArenaChain } from '@/components/arena-chain-provider'
 import { useArenaAuth } from '@/hooks/use-arena-auth'
+import { useCurrentMarket } from '@/hooks/use-current-market'
+import { useMarketBoard } from '@/hooks/use-market-board'
+import { usePlayer } from '@/hooks/use-player'
 import { useArenaSession } from '@/hooks/use-trade-setup'
 import { arenaRealtime, useArenaRealtime } from '@/lib/arena-realtime'
 import { errorMessage } from '@/lib/error'
+import { heartReportMarkets, type MarketRounds } from '@/lib/markets'
+import { nowSeconds } from '@/lib/session-key'
 import { PRESENCE_HEARTBEAT_MS, traderFromDto } from '@/lib/traders'
-import { HEART_BPM_MAX, HEART_BPM_MIN, keypairSigner, sendErTransaction } from '@rogs/arena-sdk'
+import { HEART_BPM_MAX, HEART_BPM_MIN, keypairSigner, sendErTransaction, type PositionState } from '@rogs/arena-sdk'
 import { PublicKey } from '@solana/web3.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
+
+type HeartTargets = { positions: PositionState[]; rounds: MarketRounds; fallback: number }
 
 type TradersStatus = 'loading' | 'live' | 'error'
 
@@ -36,13 +43,29 @@ export function usePublishTraderHeartRate(bpm: number | null, live: boolean): He
   const { token } = useArenaAuth()
   const { connections, instructions } = useArenaChain()
   const { session, owner } = useArenaSession()
+  const { player } = usePlayer()
+  const { arena } = useCurrentMarket()
+  const { rounds } = useMarketBoard()
   const value = live ? bpm : null
   const valueRef = useRef(value)
+  const targetsRef = useRef<HeartTargets>({ positions: [], rounds: {}, fallback: 0 })
   const [report, setReport] = useState<HeartChainReport>(emptyHeartReport)
 
   useEffect(() => {
     valueRef.current = value
   }, [value])
+
+  // Read at send time, so position and round changes never restart the 5 s report loop.
+  useEffect(() => {
+    targetsRef.current = {
+      positions: player?.positions ?? [],
+      rounds: arena
+        ? { ...rounds, [arena.market]: { id: arena.current.id, status: arena.current.status, endTs: arena.current.endTs } }
+        : rounds,
+      // With no live position the reading still goes on-chain: via the selected coin when its arena exists, else BTC.
+      fallback: arena?.market ?? 0,
+    }
+  }, [arena, player, rounds])
 
   useEffect(() => {
     if (!token) return
@@ -71,8 +94,16 @@ export function usePublishTraderHeartRate(bpm: number | null, live: boolean): He
 
       sending = true
       try {
-        const instruction = await instructions.reportHeart(session.keypair.publicKey, ownerKey, rounded, session.token)
-        const sent = await sendErTransaction(connections.er, [instruction], signer)
+        // report_heart samples the position in the passed arena's running round, so the reading goes to every coin
+        // where this wallet holds one, all in one ER transaction.
+        const targets = targetsRef.current
+        const markets = heartReportMarkets(targets.positions, targets.rounds, nowSeconds(), targets.fallback)
+        const reports = await Promise.all(
+          markets.map((market) =>
+            instructions.reportHeart(session.keypair.publicKey, ownerKey, rounded, session.token, market),
+          ),
+        )
+        const sent = await sendErTransaction(connections.er, reports, signer)
         if (!stopped) setReport({ signature: sent.signature, ms: sent.ms, error: null })
       } catch (error) {
         if (!stopped) setReport({ signature: null, ms: null, error: `On-chain heart report failed: ${errorMessage(error)}` })

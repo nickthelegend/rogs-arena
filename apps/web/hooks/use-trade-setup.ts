@@ -6,7 +6,14 @@ import { usePlayer } from '@/hooks/use-player'
 import { ArenaApiError, authNonce, authVerify, requestFaucet } from '@/lib/arena-api'
 import { activateAuthWallet, clearStoredAuth, readStoredAuth, signInArena } from '@/lib/arena-auth'
 import { errorMessage } from '@/lib/error'
-import { readStoredSession, SESSION_HOURS, writeStoredSession, type ArenaSession } from '@/lib/session-key'
+import {
+  parseStoredSession,
+  readStoredSession,
+  SESSION_HOURS,
+  sessionStorageKey,
+  writeStoredSession,
+  type ArenaSession,
+} from '@/lib/session-key'
 import {
   failedTradeSetupStatus,
   faucetNeeds,
@@ -43,6 +50,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react'
 
@@ -60,8 +68,42 @@ type ConnectWaiter = {
 
 type WalletSession = { wallet: string; session: ArenaSession }
 
+/** The session key saved in this browser for the connected wallet, or why it could not be read. */
+type SavedSession = { session: ArenaSession | null; error: string | null }
+
+const noSavedSession: SavedSession = { session: null, error: null }
+let savedSessionCache: { wallet: string; programId: string; raw: string | null; value: SavedSession } | null = null
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function subscribeSavedSessions(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  return () => window.removeEventListener('storage', onChange)
+}
+
+/**
+ * The saved session key as a useSyncExternalStore snapshot. It is cached by the raw stored value (or the read error),
+ * so it stays the same object until that changes. Setup re-checks the key on-chain before relying on it.
+ */
+function savedSessionSnapshot(wallet: string | null, programId: PublicKey): SavedSession {
+  if (!wallet) return noSavedSession
+  const program = programId.toBase58()
+  let raw: string | null = null
+  let error: string | null = null
+  try {
+    raw = window.localStorage.getItem(sessionStorageKey(wallet))
+  } catch (cause) {
+    error = `Could not read the saved session key: ${errorMessage(cause)}`
+  }
+  const cached = savedSessionCache
+  if (cached?.wallet === wallet && cached.programId === program && cached.raw === raw && cached.value.error === error) {
+    return cached.value
+  }
+  const session = error ? null : parseStoredSession(raw, wallet, programId)
+  savedSessionCache = { wallet, programId: program, raw, value: { session, error } }
+  return savedSessionCache.value
 }
 
 function useTradeSetupController() {
@@ -129,20 +171,28 @@ function useTradeSetupController() {
     [],
   )
 
-  // Restore this wallet's saved session key; setup re-checks it on-chain before relying on it.
-  useEffect(() => {
-    if (!address) {
-      setSession(null)
-      return
-    }
-    try {
-      const stored = readStoredSession(address, chain.programId)
-      setSession(stored ? { wallet: address, session: stored } : null)
-    } catch (error) {
-      setSession(null)
-      setStatus(failedTradeSetupStatus(new Error(`Could not read the saved session key: ${errorMessage(error)}`), { address }))
-    }
-  }, [address, chain.programId, setSession])
+  // This wallet's saved session key is usable before setup runs; setup re-checks it on-chain before relying on it.
+  const getSavedSession = useCallback(() => savedSessionSnapshot(address, chain.programId), [address, chain.programId])
+  const saved = useSyncExternalStore(subscribeSavedSessions, getSavedSession, () => noSavedSession)
+  const [reportedSaved, setReportedSaved] = useState<SavedSession>(noSavedSession)
+  if (saved !== reportedSaved) {
+    setReportedSaved(saved)
+    if (saved.error) setStatus(failedTradeSetupStatus(new Error(saved.error), { address: address ?? undefined }))
+  }
+
+  /** The session key setup made or confirmed for `owner` in this tab, else the one saved in this browser. */
+  const sessionFor = useCallback(
+    (owner: string) => {
+      const current = sessionRef.current
+      if (current?.wallet === owner) return current.session
+      try {
+        return readStoredSession(owner, chain.programId)
+      } catch {
+        return null
+      }
+    },
+    [chain.programId],
+  )
 
   // Switching to another wallet starts that wallet's setup from the beginning.
   useEffect(() => {
@@ -274,27 +324,30 @@ function useTradeSetupController() {
         return account ? { joined: account.joined, balance: account.balance } : null
       },
       claimChips: async (owner) => {
-        const active = sessionRef.current
-        if (!active || active.wallet !== owner) throw new Error('Create a session key before claiming chips.')
-        const keypair = active.session.keypair as unknown as Parameters<typeof keypairSigner>[0]
-        const instruction = await chain.instructions.claimChips(keypair.publicKey, new PublicKey(owner), active.session.token)
+        const active = sessionFor(owner)
+        if (!active) throw new Error('Create a session key before claiming chips.')
+        const keypair = active.keypair as unknown as Parameters<typeof keypairSigner>[0]
+        const instruction = await chain.instructions.claimChips(keypair.publicKey, new PublicKey(owner), active.token)
         const sent = await sendErTransaction(chain.connections.er, [instruction], keypairSigner(keypair))
         await readPlayer(owner)
         return sent
       },
     }),
-    [chain, connectWallet, readPlayer, setSession, signerFor, waitForLamports],
+    [chain, connectWallet, readPlayer, sessionFor, setSession, signerFor, waitForLamports],
   )
 
-  const fail = useCallback((error: unknown) => {
-    const current = statusRef.current
-    const owner = walletRef.current.publicKey?.toBase58() ?? current.address
-    const balances =
-      current.sol != null && current.chips != null ? { sol: current.sol, chips: current.chips } : undefined
-    // A wallet that already has its session key stays on the island so funds can be retried from there.
-    if (owner && sessionRef.current?.wallet === owner) setDidPrepare(true)
-    setStatus(failedTradeSetupStatus(error, { address: owner ?? undefined, balances }))
-  }, [])
+  const fail = useCallback(
+    (error: unknown) => {
+      const current = statusRef.current
+      const owner = walletRef.current.publicKey?.toBase58() ?? current.address
+      const balances =
+        current.sol != null && current.chips != null ? { sol: current.sol, chips: current.chips } : undefined
+      // A wallet that already has its session key stays on the island so funds can be retried from there.
+      if (owner && sessionFor(owner)) setDidPrepare(true)
+      setStatus(failedTradeSetupStatus(error, { address: owner ?? undefined, balances }))
+    },
+    [sessionFor],
+  )
 
   const start = useCallback(
     async (choice?: WalletChoice) => {
@@ -357,9 +410,11 @@ function useTradeSetupController() {
   }, [address, start, status.step, wallet.ready])
 
   const chips = player?.balance ?? status.chips
-  const balances: TradeSetupBalances | undefined =
-    status.sol != null && chips != null ? { sol: status.sol, chips } : undefined
-  const activeSession = session && session.wallet === address ? session.session : null
+  const balances = useMemo<TradeSetupBalances | undefined>(
+    () => (status.sol != null && chips != null ? { sol: status.sol, chips } : undefined),
+    [chips, status.sol],
+  )
+  const activeSession = session && session.wallet === address ? session.session : saved.session
 
   return useMemo(
     () => ({

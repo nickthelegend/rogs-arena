@@ -85,10 +85,6 @@ export default function PaneTradingZone({
     setAmount((current) => Math.max(TRADE_AMOUNT_STEP, current + delta))
   }
 
-  function progressHint(profit: number) {
-    return { profit, heartRate: { live: heartRate.live, bpm: heartRate.bpm } }
-  }
-
   async function buy(outcome: 'YES' | 'NO') {
     const result = await placeTrade(outcome, 'buy', amount, applied?.id)
     if (result?.abilityPlay) bindApplied()
@@ -97,7 +93,10 @@ export default function PaneTradingZone({
   return (
     <div className="flex h-full w-full gap-2 pointer-events-none">
       {Boolean(heartRate.bpm) && (
-        <div id="bpm" className="absolute w-[400px] h-[100px] top-[-80px] left-1/2 -translate-x-1/2 z-0">
+        <div
+          id="bpm"
+          className="absolute w-[400px] h-[100px] top-[-80px] left-1/2 -translate-x-1/2 z-0 max-md:w-full max-md:max-w-[400px]"
+        >
           <figure className="w-full h-full">
             <svg
               className="w-full h-auto"
@@ -158,8 +157,15 @@ export default function PaneTradingZone({
       )}
 
       <div className="absolute w-full h-[80px] top-[-40px] flex justify-between">
-        <div>
-          <svg width="323" height="78" viewBox="0 0 323 78" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="max-md:w-1/2 max-md:max-w-[323px]">
+          <svg
+            className="max-md:h-auto max-md:w-full"
+            width="323"
+            height="78"
+            viewBox="0 0 323 78"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <path
               d="M206.764 4C216.755 4 225.287 10.194 230.122 18.166C233.599 23.8991 238.418 30.3132 244.4 34.7998C257.137 44.3518 275.29 45.9889 294.555 44.5215C301.198 43.4698 306.438 44.301 310.369 46.7939C314.353 49.3205 316.351 53.1451 317.303 56.7217C318.244 60.2625 318.241 63.823 318.043 66.3857C317.942 67.69 317.787 68.7917 317.654 69.5771C317.588 69.9708 317.527 70.2885 317.48 70.5156C317.457 70.6289 317.438 70.7199 317.423 70.7871C317.415 70.8206 317.409 70.8487 317.404 70.8701C317.402 70.8807 317.399 70.8899 317.397 70.8975C317.397 70.9013 317.396 70.9052 317.396 70.9082C317.395 70.9096 317.395 70.9113 317.395 70.9121L313.5 70L317.394 70.916L316.668 74H-4V24C-4 12.9543 4.95431 4 16 4H206.764Z"
               fill="#1A1A1A"
@@ -205,8 +211,15 @@ export default function PaneTradingZone({
           </svg>
         </div>
 
-        <div>
-          <svg width="322" height="78" viewBox="0 0 322 78" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div className="max-md:flex max-md:w-1/2 max-md:max-w-[322px] max-md:justify-end">
+          <svg
+            className="max-md:h-auto max-md:w-full"
+            width="322"
+            height="78"
+            viewBox="0 0 322 78"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <path
               d="M115.385 4C105.394 4 96.8614 10.194 92.0266 18.166C88.5497 23.8991 83.7305 30.3132 77.7483 34.7998C65.0122 44.3518 46.8582 45.9889 27.594 44.5215C20.9504 43.4698 15.7107 44.301 11.7795 46.7939C7.79556 49.3205 5.7972 53.1451 4.84595 56.7217C3.90424 60.2625 3.90792 63.823 4.10571 66.3857C4.20638 67.69 4.36199 68.7917 4.49438 69.5771C4.56074 69.9708 4.6218 70.2885 4.66821 70.5156C4.69136 70.6289 4.71103 70.7199 4.72583 70.7871C4.73322 70.8206 4.7395 70.8487 4.74438 70.8701C4.7468 70.8807 4.74947 70.8899 4.75122 70.8975C4.7521 70.9013 4.75247 70.9052 4.75317 70.9082C4.75349 70.9096 4.75395 70.9113 4.75415 70.9121L8.64868 70L4.75513 70.916L5.48071 74H326.149V20C326.149 11.1635 318.985 4 310.149 4H115.385Z"
               fill="#1A1A1A"
@@ -251,7 +264,7 @@ export default function PaneTradingZone({
           <div id="yes-position" className="flex gap-3">
             <button
               type="button"
-              onClick={() => void takeProfit('YES', progressHint(profits.YES))}
+              onClick={() => void takeProfit('YES')}
               disabled={!canExitYes}
               aria-busy={isTakingProfit}
               aria-label={`${yesExit === 'TP' ? 'Take profit' : 'Stop loss'} on UP`}
@@ -277,7 +290,7 @@ export default function PaneTradingZone({
 
             <button
               type="button"
-              onClick={() => void takeProfit('NO', progressHint(profits.NO))}
+              onClick={() => void takeProfit('NO')}
               disabled={!canExitNo}
               aria-busy={isTakingProfit}
               aria-label={`${noExit === 'TP' ? 'Take profit' : 'Stop loss'} on DOWN`}
@@ -298,11 +311,15 @@ export default function PaneTradingZone({
         </div>
       </div>
 
-      <div className="flex w-full h-full flex-1 justify-center relative z-30 bg-[#1a1a1a] rounded-2xl overflow-hidden">
-        <div className="absolute w-1 h-1 left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2">
+      {/*
+        Narrow screens (max-md) give the island about half the design width: the Up and Down panels each cover one
+        half, the amount controls shrink between them, and Back with the status line gets its own row underneath.
+      */}
+      <div className="flex w-full h-full flex-1 justify-center relative z-30 bg-[#1a1a1a] rounded-2xl overflow-hidden max-md:h-[calc(100%-44px)] max-md:self-start">
+        <div className="absolute w-1 h-1 left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 max-md:inset-x-0 max-md:w-auto max-md:translate-x-0">
           <div
             id="yes-panel"
-            className="absolute top-0 h-[180px] w-[514px] flex justify-end left-[-620px] -translate-y-1/2 p-2 pointer-events-none"
+            className="absolute top-0 h-[180px] w-[514px] flex justify-end left-[-620px] max-md:left-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pointer-events-none"
           >
             <figure className="h-full">
               <svg
@@ -336,7 +353,7 @@ export default function PaneTradingZone({
 
           <div
             id="yes-panel-texture"
-            className="absolute top-0 h-[180px] w-[514px] flex justify-end left-[-620px] -translate-y-1/2 p-2 pr-0 pointer-events-none"
+            className="absolute top-0 h-[180px] w-[514px] flex justify-end left-[-620px] max-md:left-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pr-0 pointer-events-none"
           >
             <figure className="h-full">
               <Image
@@ -357,16 +374,16 @@ export default function PaneTradingZone({
             disabled={!canTrade}
             aria-label="Buy UP"
             aria-busy={buyingYes}
-            className="pointer-events-auto cursor-pointer absolute top-0 h-[180px] w-[514px] flex justify-start left-[-620px] -translate-y-1/2 p-2 pr-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="pointer-events-auto cursor-pointer absolute top-0 h-[180px] w-[514px] flex justify-start left-[-620px] max-md:left-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pr-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <div className="absolute top-1/2 right-36 flex items-center text-white text-[40px] font-abc-gravity-italic -translate-y-1/2">
+            <div className="absolute top-1/2 right-36 flex items-center text-white text-[40px] font-abc-gravity-italic -translate-y-1/2 max-md:right-auto max-md:left-4 max-md:text-[24px]">
               {buyingYes ? <Spinner reduceMotion={reduceMotion} className="size-8" /> : <span>Up</span>}
             </div>
           </button>
 
           <div
             id="no-panel"
-            className="absolute top-0 h-[180px] w-[514px] right-[-620px] -translate-y-1/2 p-2 pointer-events-none"
+            className="absolute top-0 h-[180px] w-[514px] right-[-620px] max-md:right-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pointer-events-none"
           >
             <figure className="h-full">
               <svg
@@ -405,7 +422,7 @@ export default function PaneTradingZone({
 
           <div
             id="no-panel-texture"
-            className="absolute top-0 h-[180px] w-[514px] flex justify-start right-[-620px] -translate-y-1/2 p-2 pl-0 pointer-events-none"
+            className="absolute top-0 h-[180px] w-[514px] flex justify-start right-[-620px] max-md:right-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pl-0 pointer-events-none"
           >
             <figure className="h-full">
               <Image
@@ -426,16 +443,16 @@ export default function PaneTradingZone({
             disabled={!canTrade}
             aria-label="Buy DOWN"
             aria-busy={buyingNo}
-            className="pointer-events-auto cursor-pointer absolute top-0 h-[180px] w-[514px] flex justify-start right-[-620px] -translate-y-1/2 p-2 pl-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+            className="pointer-events-auto cursor-pointer absolute top-0 h-[180px] w-[514px] flex justify-start right-[-620px] max-md:right-0 max-md:w-[calc(50%-56px)] -translate-y-1/2 p-2 pl-0 transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <div className="absolute top-1/2 left-36 flex items-center text-white text-[40px] font-abc-gravity-italic -translate-y-1/2">
+            <div className="absolute top-1/2 left-36 flex items-center text-white text-[40px] font-abc-gravity-italic -translate-y-1/2 max-md:left-auto max-md:right-4 max-md:text-[24px]">
               {buyingNo ? <Spinner reduceMotion={reduceMotion} className="size-8" /> : <span>Down</span>}
             </div>
           </button>
         </div>
 
-        <div className="relative z-10 flex items-center flex-col w-[384px] pb-2">
-          <div className="relative min-w-[384px] h-fit flex items-center justify-between gap-2">
+        <div className="relative z-10 flex items-center flex-col w-[384px] pb-2 max-md:w-[148px] max-md:justify-center max-md:gap-1 max-md:pb-0">
+          <div className="relative min-w-[384px] h-fit flex items-center justify-between gap-2 max-md:min-w-0 max-md:w-full">
             <button
               type="button"
               id="minus"
@@ -445,7 +462,7 @@ export default function PaneTradingZone({
               className="pointer-events-auto cursor-pointer relative transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed z-10"
             >
               <figure className="z-10">
-                <svg width="128" height="106" viewBox="0 0 128 106" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg className="max-md:h-auto max-md:w-[56px]" width="128" height="106" viewBox="0 0 128 106" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M68.5372 4C82.5094 4 95.0595 12.548 100.176 25.5498L122.733 82.874C126.347 92.0593 119.576 102 109.705 102H69.2628C57.005 102 45.6959 95.4014 39.6641 84.7305L5.83893 24.8887C0.563802 15.556 7.30598 4 18.0264 4H68.5372Z"
                     fill="#222222"
@@ -455,7 +472,7 @@ export default function PaneTradingZone({
                 </svg>
               </figure>
 
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-[32px] font-abc-gravity-italic z-10">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-[32px] font-abc-gravity-italic z-10 max-md:text-[24px]">
                 -
               </div>
             </button>
@@ -467,7 +484,7 @@ export default function PaneTradingZone({
               <NumberFlow
                 value={amount}
                 animated={!reduceMotion}
-                className="text-white text-[32px] font-abc-gravity-italic z-10"
+                className="text-white text-[32px] font-abc-gravity-italic z-10 max-md:text-[22px]"
               />
 
               <video
@@ -490,7 +507,7 @@ export default function PaneTradingZone({
               className="pointer-events-auto cursor-pointer relative transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-not-allowed z-10"
             >
               <figure className="z-10">
-                <svg width="128" height="106" viewBox="0 0 128 106" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg className="max-md:h-auto max-md:w-[56px]" width="128" height="106" viewBox="0 0 128 106" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M59.1855 4C45.2133 4 32.6633 12.548 27.5469 25.5498L4.98926 82.874C1.37524 92.0593 8.14682 102 18.0176 102H58.46C70.7177 102 82.0268 95.4014 88.0586 84.7305L121.884 24.8887C127.159 15.556 120.417 4 109.696 4H59.1855Z"
                     fill="#222222"
@@ -500,16 +517,16 @@ export default function PaneTradingZone({
                 </svg>
               </figure>
 
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-[32px] font-abc-gravity-italic z-10">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-[32px] font-abc-gravity-italic z-10 max-md:text-[24px]">
                 +
               </div>
             </button>
           </div>
 
-          <div id="pnl" className="h-full relative">
-            <figure className="z-10 h-full">
+          <div id="pnl" className="h-full relative max-md:h-auto">
+            <figure className="z-10 h-full max-md:h-auto">
               <svg
-                className="h-full w-auto"
+                className="h-full w-auto max-md:h-auto max-md:w-[132px]"
                 width="224"
                 height="58"
                 viewBox="0 0 224 58"
@@ -524,7 +541,7 @@ export default function PaneTradingZone({
             </figure>
 
             <div
-              className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-baseline text-[20px] font-semibold tabular-nums pointer-events-none"
+              className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-baseline text-[20px] font-semibold tabular-nums pointer-events-none max-md:text-[15px]"
               style={{
                 color: floatingProfit > 0 ? PROFIT_COLOR : floatingProfit < 0 ? LOSS_COLOR : 'rgba(255,255,255,0.8)',
               }}
@@ -534,14 +551,14 @@ export default function PaneTradingZone({
                 value={Math.abs(floatingProfit)}
                 animated={!reduceMotion}
                 format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }}
-                className="text-[20px]"
+                className="text-[20px] max-md:text-[15px]"
               />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 z-30 flex items-end gap-3 p-2">
+      <div className="absolute bottom-0 left-0 z-30 flex items-end gap-3 p-2 max-md:right-0">
         <button
           type="button"
           onClick={onBack}
@@ -549,7 +566,7 @@ export default function PaneTradingZone({
         >
           Back
         </button>
-        <p className={`max-w-[220px] truncate pb-2 font-sans text-[11px] ${statusTone}`} aria-live="polite">
+        <p className={`max-w-[220px] truncate pb-2 font-sans text-[11px] max-md:min-w-0 max-md:max-w-none max-md:text-[12px] ${statusTone}`} aria-live="polite">
           {status?.explorerUrl ? (
             <a
               href={status.explorerUrl}

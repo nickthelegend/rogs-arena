@@ -1,5 +1,6 @@
 'use client'
 
+import { useHydrated } from '@/hooks/use-hydrated'
 import { authNonce, authVerify } from '@/lib/arena-api'
 import { activateAuthWallet, AUTH_EXPIRY_MARGIN_MS, signInArena, useArenaAuthStore } from '@/lib/arena-auth'
 import { errorMessage } from '@/lib/error'
@@ -59,6 +60,7 @@ export function ArenaWalletProvider({ children }: { children: ReactNode }) {
     disconnect: adapterDisconnect,
   } = useWallet()
   const { setVisible } = useWalletModal()
+  const hydrated = useHydrated()
   const [preferred, setPreferred] = useState<ArenaWalletMode | null>(null)
   const [guest, setGuest] = useState<GuestWallet | null>(null)
   const [restored, setRestored] = useState(false)
@@ -66,31 +68,41 @@ export function ArenaWalletProvider({ children }: { children: ReactNode }) {
   const signInRequested = useRef(false)
   const walletName = adapterWallet?.adapter.name ?? null
 
-  useEffect(() => {
+  // Storage cannot be read in the server render or during hydration, so the saved choice is restored on the first
+  // client render after hydration.
+  if (hydrated && !restored) {
+    setRestored(true)
     try {
       const stored = readWalletMode()
       setPreferred(stored)
       if (stored === 'guest') setGuest(loadGuestWallet())
     } catch (cause) {
       setError(`Could not restore the saved wallet: ${errorMessage(cause)}`)
-    } finally {
-      setRestored(true)
     }
-  }, [])
+  }
 
   const mode: ArenaWalletMode | null =
     preferred === 'guest' && guest ? 'guest' : connected && adapterKey ? 'adapter' : null
   const publicKey = mode === 'guest' && guest ? guest.publicKey : mode === 'adapter' ? adapterKey : null
   const address = publicKey?.toBase58() ?? null
 
-  useEffect(() => {
-    if (!connected || preferred !== 'adapter') return
+  const saveAdapterChoice = useCallback(() => {
     try {
       writeWalletMode('adapter')
     } catch (cause) {
       setError(`Could not save the wallet choice: ${errorMessage(cause)}`)
     }
-  }, [connected, preferred])
+  }, [])
+
+  // The extension wallet is saved as the choice only once it connects, so closing the modal keeps the previous one.
+  useEffect(() => {
+    const adapter = adapterWallet?.adapter
+    if (!adapter || preferred !== 'adapter') return
+    adapter.on('connect', saveAdapterChoice)
+    return () => {
+      adapter.off('connect', saveAdapterChoice)
+    }
+  }, [adapterWallet, preferred, saveAdapterChoice])
 
   const signTransaction = useCallback(
     async <T extends SolanaTransaction>(transaction: T): Promise<T> => {
@@ -134,8 +146,9 @@ export function ArenaWalletProvider({ children }: { children: ReactNode }) {
     setError(null)
     signInRequested.current = true
     setPreferred('adapter')
-    if (!connected) setVisible(true)
-  }, [connected, setVisible])
+    if (connected) saveAdapterChoice()
+    else setVisible(true)
+  }, [connected, saveAdapterChoice, setVisible])
 
   const playAsGuest = useCallback(() => {
     setError(null)

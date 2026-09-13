@@ -1,12 +1,16 @@
 import { env } from '@/env'
 import { errorMessage } from '@/lib/error'
+import { DEFAULT_MARKET, type MarketSymbol } from '@/lib/markets'
 
 // Contract: docs/ARENA-API.md. Amounts are USD chips, `t` fields are ms, `*Ts` fields are unix seconds,
-// wallet addresses are case-sensitive base58.
+// wallet addresses are case-sensitive base58. Market-scoped routes take `market=SOL`; round ids are namespaced
+// (`market * 2^40 + n`). `market` on a row is optional because the single-market service never sent it: see
+// `dtoMarket` in lib/markets.ts, which reads a missing ticker as BTC.
 
 export type Outcome = 'YES' | 'NO'
 
 export type RoundDto = {
+  market?: string
   roundId: number
   startTs: number
   endTs: number
@@ -23,6 +27,7 @@ export type RoundDto = {
 }
 
 export type TradeDto = {
+  market?: string
   id: string
   sig: string
   roundId: number
@@ -39,9 +44,10 @@ export type TradeDto = {
   t: number
 }
 
-export type PointDto = { roundId: number; t: number; yes: number; no: number; source: 'chain' }
+export type PointDto = { market?: string; roundId: number; t: number; yes: number; no: number; source: 'chain' }
 
 export type CloseDto = {
+  market?: string
   id: string
   roundId: number
   trader: string
@@ -53,6 +59,7 @@ export type CloseDto = {
 }
 
 export type SettlementDto = {
+  market?: string
   id: string
   sig: string
   roundId: number
@@ -91,6 +98,7 @@ export type CheersDto = {
 export type ProfileDto = { wallet: string; displayName: string | null; createdAt: number; updatedAt: number }
 
 export type ArenaSnapshot = {
+  market?: string
   round: RoundDto | null
   recentRounds: RoundDto[]
   trades: TradeDto[]
@@ -102,6 +110,18 @@ export type ArenaSnapshot = {
   chat: ChatDto[]
   cheers: CheersDto[]
   serverTime: number
+}
+
+export type MarketDto = {
+  market: string
+  id: number
+  name: string
+  color: string
+  priceDecimals: number
+  arena: string
+  oracleFeed: string
+  available: boolean
+  round: RoundDto | null
 }
 
 export type HealthDto = {
@@ -204,30 +224,39 @@ export function getHealth(signal?: AbortSignal) {
   return request<HealthDto>('/health', { signal })
 }
 
-export function getArenaSnapshot(signal?: AbortSignal) {
-  return request<ArenaSnapshot>('/api/arena', { signal })
+/** Every coin market with its availability; a 404 means the service predates markets. */
+export function getMarkets(signal?: AbortSignal) {
+  return request<MarketDto[]>('/api/markets', { signal })
 }
 
-export function getRounds(limit = 96, signal?: AbortSignal) {
-  return request<RoundDto[]>(`/api/rounds${query({ limit: Math.min(200, Math.max(1, Math.floor(limit))) })}`, { signal })
+export function getArenaSnapshot(market: MarketSymbol, signal?: AbortSignal) {
+  return request<ArenaSnapshot>(`/api/arena${query({ market })}`, { signal })
 }
 
-export function getTrades(roundId: number, signal?: AbortSignal) {
-  return request<TradeDto[]>(`/api/trades${query({ roundId })}`, { signal })
+export function getRounds(limit = 96, market: MarketSymbol = DEFAULT_MARKET, signal?: AbortSignal) {
+  const size = Math.min(200, Math.max(1, Math.floor(limit)))
+  return request<RoundDto[]>(`/api/rounds${query({ market, limit: size })}`, { signal })
 }
 
-export function getPoints(roundId: number, signal?: AbortSignal) {
-  return request<PointDto[]>(`/api/points${query({ roundId })}`, { signal })
+export function getTrades(roundId: number, market: MarketSymbol, signal?: AbortSignal) {
+  return request<TradeDto[]>(`/api/trades${query({ market, roundId })}`, { signal })
 }
 
-export function getCloses(roundId: number, signal?: AbortSignal) {
-  return request<CloseDto[]>(`/api/closes${query({ roundId })}`, { signal })
+export function getPoints(roundId: number, market: MarketSymbol, signal?: AbortSignal) {
+  return request<PointDto[]>(`/api/points${query({ market, roundId })}`, { signal })
 }
 
-export function getSettlements(filter: { roundId?: number; owner?: string } = {}, signal?: AbortSignal) {
-  return request<SettlementDto[]>(`/api/settlements${query({ roundId: filter.roundId, owner: filter.owner })}`, {
-    signal,
-  })
+export function getCloses(roundId: number, market: MarketSymbol, signal?: AbortSignal) {
+  return request<CloseDto[]>(`/api/closes${query({ market, roundId })}`, { signal })
+}
+
+/** `owner` alone returns that wallet's settlements in every market. */
+export function getSettlements(
+  filter: { roundId?: number; owner?: string; market?: MarketSymbol } = {},
+  signal?: AbortSignal,
+) {
+  const params = { market: filter.market, roundId: filter.roundId, owner: filter.owner }
+  return request<SettlementDto[]>(`/api/settlements${query(params)}`, { signal })
 }
 
 export function getChat(limit = 50, signal?: AbortSignal) {

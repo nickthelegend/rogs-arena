@@ -134,3 +134,34 @@ export function priceStatusLabel(status: PriceFeedStatus, lastUpdateMs?: number)
   if (status === 'error') return 'Feed error'
   return 'Waiting'
 }
+
+const marketPriceFormatters = new Map<number, Intl.NumberFormat>()
+
+function marketPriceFormatter(decimals: number) {
+  const digits = Math.min(Math.max(Math.round(decimals), 0), 8)
+  let formatter = marketPriceFormatters.get(digits)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    })
+    marketPriceFormatters.set(digits, formatter)
+  }
+  return formatter
+}
+
+/** A coin's USD price with that market's decimals: $77,197.85 for BTC, $0.08464 for DOGE. */
+export function formatMarketPrice(value: number | undefined, decimals: number) {
+  if (value === undefined || !Number.isFinite(value)) return '--'
+  return marketPriceFormatter(decimals).format(value)
+}
+
+export function formatMarketChange(value: number | undefined, percent: number | undefined, decimals: number) {
+  if (value === undefined || percent === undefined) return '--'
+
+  const sign = value >= 0 ? '+' : ''
+
+  return `${sign}${formatMarketPrice(value, decimals)} (${sign}${(percent * 100).toFixed(2)}%)`
+}

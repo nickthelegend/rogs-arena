@@ -17,7 +17,7 @@ export const useAbilityFlippedStore = create<AbilityFlippedState>()(
     }),
     {
       name: 'rogs.abilityFlipped',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => window.localStorage),
       skipHydration: true,
     },
   ),

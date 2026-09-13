@@ -9,6 +9,7 @@ export const PRELOAD_IMAGE_URLS = [
   ...ABILITY_CARDS.flatMap((card) => [card.image, card.front]),
   '/background-texture.webp',
   '/icon.png',
+  '/mascot.png',
   '/mark-orange.png',
   '/mark-purple.png',
 ]

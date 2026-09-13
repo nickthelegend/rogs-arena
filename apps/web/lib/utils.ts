@@ -1,5 +1,5 @@
 import type { CandlePoint, LivelinePoint } from '@/lib/liveline'
-import { BTC_PRICE_TICKS } from '@/lib/btc'
+import { PRICE_TICKS } from '@/lib/price-chart'
 type PricePoint = { blockTimestamp: number; price: number }
 type LivePrice = { blockTimestamp: number; price: number }
 
@@ -104,7 +104,7 @@ export function normalizePricePoints(points: LivelinePoint[]) {
     .filter((point) => Number.isFinite(point.value) && point.value > 0)
     .sort((left, right) => left.time - right.time)
     .filter((point, index, sorted) => index === sorted.length - 1 || point.time !== sorted[index + 1].time)
-    .slice(-BTC_PRICE_TICKS)
+    .slice(-PRICE_TICKS)
 }
 
 export function candleWidthForWindow(windowSecs: number) {

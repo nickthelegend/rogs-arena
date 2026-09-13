@@ -203,7 +203,7 @@ export default function SectionDynamicIsland() {
   return (
     <section
       ref={islandRef}
-      className="section-panel relative h-[180px] flex-none overflow-visible p-0"
+      className="section-panel relative h-[180px] flex-none overflow-visible p-0 max-md:h-[240px]"
       style={applied ? { boxShadow: `0 0 0 2px ${ABILITY_ACCENT}` } : undefined}
     >
       <AnimatePresence>
@@ -318,14 +318,14 @@ export default function SectionDynamicIsland() {
                   </div>
                 </div>
 
-                <div className="flex items-end justify-between gap-3">
+                <div className="flex items-end justify-between gap-3 max-md:flex-col max-md:items-stretch max-md:gap-2">
                   <div>
                     <p className="font-sans text-sm tabular-nums text-white/90">
                       {balances ? formatBalanceLine(balances) : 'Balances unavailable'}
                     </p>
                     {feedback ? (
                       <p
-                        className={`mt-1 line-clamp-2 max-w-[280px] font-sans text-[12px] leading-snug ${
+                        className={`mt-1 line-clamp-2 max-w-[280px] font-sans text-[12px] leading-snug max-md:max-w-none ${
                           feedback.tone === 'error'
                             ? 'text-[#F87171]'
                             : feedback.tone === 'success'
@@ -337,7 +337,7 @@ export default function SectionDynamicIsland() {
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 gap-2 max-md:flex-wrap">
                     <IslandButton
                       onClick={claim}
                       disabled={walletBusy || !canClaim}

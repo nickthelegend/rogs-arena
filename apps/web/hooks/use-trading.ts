@@ -2,12 +2,13 @@
 
 import { useArenaChain } from '@/components/arena-chain-provider'
 import { useCurrentMarket } from '@/hooks/use-current-market'
+import { useMarketBoard } from '@/hooks/use-market-board'
 import { usePlayer } from '@/hooks/use-player'
 import { useTradeSetup } from '@/hooks/use-trade-setup'
 import { abilityCardById } from '@/lib/ability'
 import { getSettlements } from '@/lib/arena-api'
 import { errorMessage } from '@/lib/error'
-import type { ProgressHeartRate } from '@/lib/progress'
+import { marketsToSettle, marketSymbolOfRound, positionsToSettle, type MarketRounds } from '@/lib/markets'
 import { nowSeconds, type ArenaSession } from '@/lib/session-key'
 import {
   abilityCode,
@@ -45,14 +46,20 @@ import {
   sendErTransaction,
   type ArenaEvent,
   type ConfirmedTx,
+  type PositionSettled,
 } from '@rogs/arena-sdk'
 import { PublicKey } from '@solana/web3.js'
-import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-
-export type TradeProgressHint = {
-  profit?: number
-  heartRate?: ProgressHeartRate
-}
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 const RECEIPT_ATTEMPTS = 6
 const RECEIPT_DELAY_MS = 300
@@ -69,9 +76,16 @@ function txLink(sent: ConfirmedTx) {
   return { signature: sent.signature, explorerUrl: explorerTxUrl(sent.signature, 'er') }
 }
 
+function settledFor(events: ArenaEvent[], owner: PublicKey): PositionSettled[] {
+  return events.flatMap((event) =>
+    event.name === 'PositionSettled' && event.data.owner.toBase58() === owner.toBase58() ? [event.data] : [],
+  )
+}
+
 function useTradingController() {
   const { connections, instructions, programId } = useArenaChain()
-  const { market, isLoading: isLoadingMarket, error: marketError } = useCurrentMarket()
+  const { market, arena, isLoading: isLoadingMarket, error: marketError } = useCurrentMarket()
+  const { rounds: boardRounds } = useMarketBoard()
   const { player, isLoading: isLoadingPlayer, error: playerError, refresh: refreshPlayer } = usePlayer()
   const { session, owner } = useTradeSetup()
   const walletId = owner
@@ -97,13 +111,27 @@ function useTradingController() {
     positions,
     busy,
   })
+  // Exit quotes, TP/SL and cards all read the selected coin's open-round position against that coin's pools.
   const position = roundPosition(player, market?.roundId)
   const positionAbility =
     position && (position.yesShares > 0n || position.noShares > 0n) && position.proceeds === 0n ? position.ability : null
   const exitQuotes = exitQuotesFor(market, position)
 
+  // Round clocks for every coin: the board polls all arenas, the selected coin's live account is fresher.
+  const marketRounds = useMemo<MarketRounds>(
+    () =>
+      arena
+        ? {
+            ...boardRounds,
+            [arena.market]: { id: arena.current.id, status: arena.current.status, endTs: arena.current.endTs },
+          }
+        : boardRounds,
+    [arena, boardRounds],
+  )
+
   // The keeper settles resolved rounds by itself. When a position leaves the player account, report what it
-  // paid from the indexed PositionSettled rows, so the result is visible without pressing Claim.
+  // paid from the indexed PositionSettled rows, so the result is visible without pressing Claim. Slots are shared
+  // by every coin, so this covers positions in any market.
   const activeRoundsRef = useRef<{ owner: string; rounds: number[] } | null>(null)
   const reportedRoundsRef = useRef(new Set<string>())
   useEffect(() => {
@@ -120,7 +148,15 @@ function useTradingController() {
     void (async () => {
       for (let attempt = 0; attempt < 10; attempt++) {
         try {
-          const rows = (await Promise.all(settled.map((roundId) => getSettlements({ roundId, owner })))).flat()
+          const rows = (
+            await Promise.all(
+              settled.map((roundId) =>
+                getSettlements({ roundId, owner, market: marketSymbolOfRound(roundId) ?? undefined }),
+              ),
+            )
+          )
+            .flat()
+            .filter((row) => settled.includes(row.roundId))
           if (rows.length >= settled.length) {
             const latest = rows.reduce((left, right) => (right.t > left.t ? right : left))
             setStatus({
@@ -139,18 +175,37 @@ function useTradingController() {
     })()
   }, [owner, player])
 
-  useEffect(() => {
+  // A new player or market read error replaces the status line; the same error staying around does not.
+  const [shownPlayerError, setShownPlayerError] = useState<string | null>(null)
+  if (playerError !== shownPlayerError) {
+    setShownPlayerError(playerError)
     if (playerError) setStatus({ tone: 'error', message: playerError })
-  }, [playerError])
+  }
 
-  useEffect(() => {
+  const [shownMarketError, setShownMarketError] = useState<string | null>(null)
+  if (marketError !== shownMarketError) {
+    setShownMarketError(marketError)
     if (marketError) setStatus({ tone: 'error', message: marketError })
-  }, [marketError])
+  }
 
   function requireSession() {
     if (!owner) throw new Error('Connect a wallet or play as guest first.')
     if (!session) throw new Error('Finish setup first: this wallet has no session key yet.')
     return { ownerKey: new PublicKey(owner), active: session, signer: sessionSigner(session) }
+  }
+
+  /**
+   * `settle_player` for every coin (except `exclude`) holding a finished position, one instruction per market.
+   * The rounds it covers are marked as reported, since the caller announces the settlement from its own receipt.
+   */
+  async function settleInstructions(ownerKey: PublicKey, exclude?: number) {
+    const now = nowSeconds()
+    const held = player?.positions ?? []
+    for (const item of positionsToSettle(held, marketRounds, now, { exclude })) {
+      reportedRoundsRef.current.add(`${ownerKey.toBase58()}:${item.roundId}`)
+    }
+    const markets = marketsToSettle(held, marketRounds, now, { exclude })
+    return Promise.all(markets.map((id) => instructions.settlePlayer(ownerKey, id)))
   }
 
   const readEvents = useCallback(
@@ -199,6 +254,9 @@ function useTradingController() {
 
       const usd = amount ?? DEFAULT_TRADE_AMOUNT
       const quote = buyQuote(market, outcome, usd)
+      // The 4 position slots are shared by every coin. Finished positions of other coins are settled in the same
+      // ER transaction, so they never block this buy; `buy` settles this coin's own finished slots itself.
+      const settles = await settleInstructions(ownerKey, market.market)
       const instruction = await instructions.buy(
         active.keypair.publicKey,
         ownerKey,
@@ -207,19 +265,23 @@ function useTradingController() {
         quote.minShares,
         ability,
         active.token,
+        market.market,
       )
-      const sent = await sendErTransaction(connections.er, [instruction], signer)
+      const sent = await sendErTransaction(connections.er, [...settles, instruction], signer)
 
       let fill: TradeFill = { side: 'buy', outcome, shares: null, usd, ms: sent.ms }
       let abilityPlay: PlaceTradeResult['abilityPlay'] = null
       const notes: string[] = []
 
       try {
-        const trade = (await readEvents(sent.signature)).find((event) => event.name === 'TradeExecuted')
+        const events = await readEvents(sent.signature)
+        const trade = events.find((event) => event.name === 'TradeExecuted')
         if (trade?.name === 'TradeExecuted') {
           fill = { ...fill, shares: chipsToUsd(trade.data.shares), usd: chipsToUsd(trade.data.amount) }
           if (ability !== ABILITY_NONE && trade.data.ability === ability) abilityPlay = { id: sent.signature }
         }
+        const settled = settledFor(events, ownerKey)
+        if (settled.length > 0) notes.push(formatSettlementMessage(settled))
       } catch (error) {
         notes.push(`The trade confirmed, but its receipt could not be read: ${errorMessage(error)}.`)
       }
@@ -258,7 +320,7 @@ function useTradingController() {
     }
   }
 
-  async function takeProfit(outcome?: Outcome, _progress?: TradeProgressHint) {
+  async function takeProfit(outcome?: Outcome) {
     const lots = sellablePositions(positions, outcome)
     if (lots.length === 0) {
       setStatus({ tone: 'error', message: 'No shares to sell.' })
@@ -290,6 +352,7 @@ function useTradingController() {
           lot.shares,
           quote.minOut,
           active.token,
+          market.market,
         )
         const sent = await sendErTransaction(connections.er, [instruction], signer)
         last = sent
@@ -330,18 +393,17 @@ function useTradingController() {
       setStatus({ tone: 'neutral', message: 'Settling resolved rounds on the MagicBlock ER...' })
 
       const { ownerKey, signer } = requireSession()
-      // This claim reports its own settlement; keep the keeper watcher from announcing the same rounds again.
-      for (const item of player?.positions ?? []) {
-        if (item.active && item.roundId !== market?.roundId) reportedRoundsRef.current.add(`${ownerKey.toBase58()}:${item.roundId}`)
+      // One settle_player per coin with a finished position; this claim reports its own settlement.
+      const settles = await settleInstructions(ownerKey)
+      if (settles.length === 0) {
+        setStatus({ tone: 'success', message: formatSettlementMessage([]) })
+        return
       }
-      const instruction = await instructions.settlePlayer(ownerKey)
-      const sent = await sendErTransaction(connections.er, [instruction], signer)
+      const sent = await sendErTransaction(connections.er, settles, signer)
 
       let message: string
       try {
-        const settled = (await readEvents(sent.signature)).flatMap((event) =>
-          event.name === 'PositionSettled' && event.data.owner.toBase58() === ownerKey.toBase58() ? [event.data] : [],
-        )
+        const settled = settledFor(await readEvents(sent.signature), ownerKey)
         message = `${formatSettlementMessage(settled)} Confirmed in ${Math.round(sent.ms)} ms on the MagicBlock ER.`
       } catch (error) {
         message = `Settlement confirmed in ${Math.round(sent.ms)} ms, but its receipt could not be read: ${errorMessage(error)}.`
@@ -362,7 +424,7 @@ function useTradingController() {
     }
   }
 
-  /** Attaches a card to the position already held in the open round (before the ability lock). */
+  /** Attaches a card to the position already held in the selected coin's open round (before the ability lock). */
   const attachAbility = useCallback(
     async (abilityId: number): Promise<ConfirmedTx | null> => {
       const card = abilityCardById(abilityId)
@@ -379,11 +441,12 @@ function useTradingController() {
           new PublicKey(owner),
           abilityCode(abilityId),
           session.token,
+          market.market,
         )
         const sent = await sendErTransaction(connections.er, [instruction], sessionSigner(session))
         setStatus({
           tone: 'success',
-          message: `${card?.name ?? 'Ability'} attached to your round position in ${Math.round(sent.ms)} ms on the MagicBlock ER.`,
+          message: `${card?.name ?? 'Ability'} attached to your ${market.asset} round position in ${Math.round(sent.ms)} ms on the MagicBlock ER.`,
           ...txLink(sent),
         })
         return sent

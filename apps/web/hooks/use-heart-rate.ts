@@ -15,6 +15,7 @@ import {
   type HeartRateContact,
   type HeartRateRememberedDevice,
 } from '@/lib/heart-rate'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type HeartRateStatus = 'unsupported' | 'idle' | 'requesting' | 'connecting' | 'live' | 'error'
@@ -290,15 +291,21 @@ export function useHeartRate() {
     await disconnect()
   }, [disconnect, remember])
 
+  // Web Bluetooth support and the remembered device only exist in the browser, so the server render and hydration
+  // stay idle and the first client render after hydration shows them. A connect that already started keeps its state.
+  const hydrated = useHydrated()
+  const [restored, setRestored] = useState(false)
+  if (hydrated && !restored) {
+    setRestored(true)
+    const initial = isHeartRateSupported() ? idleWith(readRememberedHeartRateDevice()) : unsupportedState()
+    setState((current) => (current === idleState ? initial : current))
+  }
+
   useEffect(() => {
-    if (!isHeartRateSupported()) {
-      setState(unsupportedState())
-      return
-    }
+    if (!isHeartRateSupported()) return
 
     const remembered = readRememberedHeartRateDevice()
     rememberedRef.current = remembered
-    setState(idleWith(remembered))
 
     if (remembered && !didAutoConnect.current) {
       didAutoConnect.current = true

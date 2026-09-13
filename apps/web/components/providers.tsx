@@ -1,5 +1,6 @@
 'use client'
 
+import '@/lib/server-storage'
 import '@/lib/buffer-polyfill'
 import '@solana/wallet-adapter-react-ui/styles.css'
 import { ArenaChainProvider } from '@/components/arena-chain-provider'
@@ -8,6 +9,8 @@ import { ArenaWalletProvider } from '@/components/arena-wallet-provider'
 import { PreloadGate } from '@/components/preload-gate'
 import { env } from '@/env'
 import { CurrentMarketProvider } from '@/hooks/use-current-market'
+import { MarketBoardProvider } from '@/hooks/use-market-board'
+import { MarketSelectionSync } from '@/hooks/use-market-selection'
 import { PlayerProvider } from '@/hooks/use-player'
 import { TradeSetupProvider } from '@/hooks/use-trade-setup'
 import { useTraderPresence } from '@/hooks/use-traders'
@@ -35,18 +38,21 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <WalletModalProvider>
           <ArenaWalletProvider>
             <ArenaChainProvider>
+              <MarketSelectionSync />
               <QueryClientProvider client={queryClient}>
                 <ArenaRealtimeProvider>
                   <TraderPresence />
-                  <CurrentMarketProvider>
-                    <PlayerProvider>
-                      <TradeSetupProvider>
-                        <TradingProvider>
-                          <PreloadGate>{children}</PreloadGate>
-                        </TradingProvider>
-                      </TradeSetupProvider>
-                    </PlayerProvider>
-                  </CurrentMarketProvider>
+                  <MarketBoardProvider>
+                    <CurrentMarketProvider>
+                      <PlayerProvider>
+                        <TradeSetupProvider>
+                          <TradingProvider>
+                            <PreloadGate>{children}</PreloadGate>
+                          </TradingProvider>
+                        </TradeSetupProvider>
+                      </PlayerProvider>
+                    </CurrentMarketProvider>
+                  </MarketBoardProvider>
                 </ArenaRealtimeProvider>
               </QueryClientProvider>
             </ArenaChainProvider>

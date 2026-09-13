@@ -1,7 +1,5 @@
 import type { RoundDto } from '@/lib/arena-api'
-import { BTC_ASSET } from '@/lib/btc'
 
-export const HISTORY_ASSET = BTC_ASSET
 export const HISTORY_INTERVAL_SECONDS = 5 * 60
 export const HISTORY_PAGE_SIZE = 96
 

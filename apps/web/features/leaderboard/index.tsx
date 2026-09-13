@@ -9,7 +9,7 @@ export default function SectionLeaderboard() {
   const reduceMotion = useReducedMotion() ?? false
 
   return (
-    <section className="section-panel flex min-h-0 flex-1 flex-col gap-2 overflow-hidden select-none relative">
+    <section className="section-panel flex min-h-0 flex-1 flex-col gap-2 overflow-hidden select-none relative max-md:h-[300px] max-md:flex-none">
       <motion.div layoutScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg hide-scrollbar">
         {items.length === 0 ? (
           <p className="px-2 py-3 font-sans text-sm text-[#6A7374]">

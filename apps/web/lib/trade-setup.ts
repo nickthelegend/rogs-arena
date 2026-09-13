@@ -198,7 +198,9 @@ export async function fundTradeWallet(
   onStatus: (status: TradeSetupStatus) => void,
   asset?: FaucetAsset,
 ) {
-  let { balances, player } = await readBalances(deps, address)
+  const initial = await readBalances(deps, address)
+  const { player } = initial
+  let { balances } = initial
   onStatus(tradeSetupStatus('checking_balances', { address, balances }))
 
   const needs = faucetNeeds(balances)

@@ -73,8 +73,8 @@ function MarketValueFeed() {
   const tradeMarkers = useMemo(() => toTradeMarkers(trades), [trades])
 
   return (
-    <section className="section-panel relative flex min-h-0 flex-col overflow-hidden px-0">
-      <header className="absolute top-3 right-3 flex flex-none items-start justify-between gap-4 px-1">
+    <section className="section-panel relative flex min-h-0 flex-col overflow-hidden px-0 max-md:h-[300px] max-md:flex-none">
+      <header className="absolute top-3 right-3 flex flex-none items-start justify-between gap-4 px-1 max-md:static max-md:mb-2 max-md:justify-end max-md:px-4 max-md:pt-1">
         <div className="flex items-start gap-6 text-right">
           <div>
             <p className="font-sans text-sm" style={{ color: YES_COLOR }}>
