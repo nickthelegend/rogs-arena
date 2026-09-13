@@ -31,6 +31,7 @@ Everything happens on Solana devnet through MagicBlock:
 - **VRF:** Fair Cheers winners are picked by MagicBlock VRF from the complete candidate set.
 - **Magic Actions:** "Save to Solana" commits the player back to Solana, and a post-commit action writes the player's badges into a BadgeRecord account on the base layer.
 - **Commits:** arenas and players are committed to Solana, with commit receipts in the UI.
+- **Real heart rate:** the Wearable pane reads a real fingertip pulse sensor (CELL-4B on a Raspberry Pi, over Wi-Fi) or any Bluetooth heart-rate monitor. The session key writes the bpm on-chain every few seconds, and the program pays the Calm pulse card only for a fresh on-chain reading under 120 bpm.
 
 Stack: an Anchor program, a Bun service (indexer, keeper, price sampler, REST and WebSocket, MongoDB) on Railway, and a Next.js frontend on Vercel.
 
@@ -76,15 +77,19 @@ Your own details.
 - **Site:** the live site, or `localhost:3000` with the local stack running. The five demo traders ("Rogbots") keep the arena busy: `bun scripts/demo-activity.ts 60 <service url>` from `apps/arena`.
 - **Explorer tab:** open the Solana Explorer program link above in a second tab.
 - **Round timing:** start recording when the BTC round has about 3:30 left, so the round ends during the settlement part of the script. The countdown is in the top island.
+- **Pulse clip (record separately on `localhost:3000`):**
+  - The live https site cannot reach a device on your home network, so the heart segment is its own local clip, spliced in at 2:10.
+  - Before recording, check that `http://192.168.1.22:8765/pulse` shows `"present": true` with a bpm.
+  - For a clean reading, put your hand and forearm flat on the table, touch the sensor with almost no pressure, shade it with your other hand, and stay still for about 20 seconds. Rub your hands first if your fingers are cold.
 - **Afterwards:** cut dead time when editing.
 
 ### Script
 
-#### 0:00–0:25 Intro
+#### 0:00–0:20 Intro
 - **Show:** the site loading (Rog frog over ROGS), or a title card.
 - **Say:** "This is Rogs Arena: a social prediction arena where you call UP or DOWN on nine coins every five minutes. On a normal chain every click would be a wallet popup and a few seconds of waiting. Here everything runs on a MagicBlock Ephemeral Rollup, so it plays like a game."
 
-#### 0:25–0:55 The live arena
+#### 0:20–0:45 The live arena
 - **Point at:**
   - the BTC logo and live oracle price, and the tab title;
   - the UP/DOWN odds chart;
@@ -94,19 +99,19 @@ Your own details.
   - the "ER RTT … ms" readout.
 - **Say:** "Prices come from MagicBlock oracle feeds read inside the rollup. These are live traders and live chat. The Rogbots are our demo wallets, trading on devnet through exactly the same paths as you."
 
-#### 0:55–1:35 Connect a wallet
+#### 0:45–1:20 Connect a wallet
 - **Do:** click **Connect wallet** → Phantom → approve the sign-in message.
   - The island steps through SIGNING IN → JOINING ROLLUP → CREATING SESSION → CLAIMING CHIPS → "… SOL (devnet) · 250 chips".
   - Approve the two transactions Phantom asks for.
 - **Say:** "One message to sign in. One transaction delegates my player account to the rollup, and one creates a session key. After this I never see a wallet popup again."
 - **Optional:** in the explorer tab, show the delegation transaction.
 
-#### 1:35–2:05 Trade on the rollup
+#### 1:20–1:45 Trade on the rollup
 - **Do:** **Trade** → **Buy UP** with $5. The status line reads "Bought … YES for $5.00 in ~250 ms on the MagicBlock ER." Click the status line's transaction link.
 - **Show:** the ER explorer, where the signer is the session key, not the wallet. Back in the arena, your position is on the leaderboard.
 - **Say:** "A quarter of a second, gasless, no popup."
 
-#### 2:05–2:35 Ability cards
+#### 1:45–2:10 Ability cards
 - **Do:** reveal **Double price** and drag it onto the island: "Double price attached …". Then drag a second card: rejected, "An ability card is already attached to this position".
 - **Say:** "Cards are enforced by the program itself:
   - one card per position, and none in the last 30 seconds;
@@ -115,33 +120,43 @@ Your own details.
   - Calm pulse pays when a heart-rate wearable reports under 120 bpm;
   - Cheers pays a random winner chosen with MagicBlock VRF."
 
-#### 2:35–3:00 Social and nine coins
+#### 2:10–2:45 Real pulse: Calm pulse (local clip)
+- **Do:** on `localhost:3000`:
+  1. Open a small position with the **Calm pulse** card attached, before the last 30 seconds of the round.
+  2. Click **Wearable** in the island; it reads "CELL-4B pulse sensor over Wi-Fi".
+  3. Rest your fingertip lightly on the sensor.
+- **Show:**
+  - Your bpm appears in the island and next to your name in the traders list, updating every couple of seconds.
+  - Keep the finger steady through the round end. The settlement message then says whether Calm pulse paid ("Calm pulse paid $…: your on-chain heart rate stayed under 120 bpm") or why it did not.
+- **Say:** "This is a real pulse sensor on a Raspberry Pi, streaming over Wi-Fi. My session key writes my heart rate on-chain every few seconds. Stay calm under 120 bpm and win, and the Calm pulse card pays a bonus. The program checks the on-chain value, not the website."
+
+#### 2:45–3:05 Social and nine coins
 - **Do:** send a chat message. Open the coin board (9 coins with live prices and round timers), switch to **SOL**, and stay about 5 seconds.
 - **Say:** "Nine markets. Each one is its own delegated arena with its own oracle feed and crank."
 
-#### 3:00–3:20 Take profit or stop loss
+#### 3:05–3:20 Take profit or stop loss
 - **Do:** open a small position and press the TP/SL button. The status line reads "Sold … in ~300 ms on the MagicBlock ER."
 - **Say:** "Exits sell straight back into the on-chain AMM."
 
-#### 3:20–3:55 Round end and settlement
+#### 3:20–3:50 Round end and settlement
 - **Do:** switch back to BTC, where you still hold the UP position, and let the countdown reach zero.
   - The board freezes on the result and the new round opens with a fresh strike.
   - The island shows "Settled 1 position: paid $…, P/L …".
 - **Say:** "No server rolls the rounds. A MagicBlock scheduled task calls roll_round inside the rollup, then the position is settled on the ER."
 
-#### 3:55–4:20 Save to Solana (Magic Action)
+#### 3:50–4:15 Save to Solana (Magic Action)
 - **Do:** click **Save to Solana**. It shows "Waiting for the Magic Action on Solana…", then "Saved by a MagicBlock Magic Action · rollup tx · Solana tx". Open the Solana tx.
 - **Say:** "The rollup commits my player back to Solana, and a Magic Action writes my badges into an account on the base layer in the same flow."
 
-#### 4:20–4:45 Proof page
+#### 4:15–4:40 Proof page
 - **Do:** click **MagicBlock proof** in the footer.
 - **Show:** all 9 arenas marked delegated, crank task ids, oracle prices a few seconds old, the VRF Cheers panel and commits.
 - **Say:** "Everything on this page is read live from devnet, the rollup and the MagicBlock router."
 
-#### 4:45–5:00 Close
+#### 4:40–5:00 Close
 - **Show:** the program id and repo link (or the architecture list from the description).
 - **Say:** "Rogs Arena: Ephemeral Rollups, session keys, oracle, VRF, scheduled tasks and Magic Actions, all in one game. Built for MagicBlock Blitz v8."
 
 ### What not to claim
-- **Heart rate:** no live wearable was tested. Describe Calm pulse as designed for a wearable.
+- **Heart rate:** show the bpm only from a clean, steady sensor reading in the local clip. Don't claim the live website reads the sensor; browsers block an https page from calling a device on your home network.
 - **Rogbots:** they are automated demo wallets. Their transactions are real, but say what they are.
