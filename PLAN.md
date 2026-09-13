@@ -385,30 +385,30 @@ rogs/
 - **P4.09** `NOT STARTED` (P2) — Bots: `BOTS_ENABLED` with N keypairs funded by the faucet wallet; real ER trades every 20–60s; `users.isBot=true`.
 
 ### Phase 5 — Web backend swap, keep every component (target: 13:00 IST)
-- **P5.01** `IN PROGRESS` (P0) — Dependencies:
+- **P5.01** `DONE` (P0) — Dependencies:
   - Remove `@privy-io/*`, `wagmi`, `viem`, `@somnia-chain/markets-sdk`, `firebase`, `drizzle-orm`, `drizzle-zod`, `drizzle-kit`, `postgres`.
   - Add `@solana/web3.js`, `@solana/wallet-adapter-{base,react,react-ui,wallets}`, `@rogs/arena-sdk`, `bs58`, `tweetnacl`, `buffer`.
   - Delete `db/`, `drizzle/`, `drizzle.config.ts`, `lib/{privy,wagmi,viem,firebase,dreamdex,admin-tusdc}.ts`, `app/api/**`, `services/**` (backend only).
-- **P5.02** `NOT STARTED` (P0) — `env.ts` → the new client vars (§2.6). No import-time service construction (fixes G-04).
-- **P5.03** `NOT STARTED` (P0) — `components/providers.tsx`:
+- **P5.02** `DONE` (P0) — `env.ts` → the new client vars (§2.6). No import-time service construction (fixes G-04).
+- **P5.03** `DONE` (P0) — `components/providers.tsx`:
   - Wallet providers (devnet), a **guest wallet** adapter (Keypair in localStorage key `rogs.guest`, labeled "Guest wallet (devnet)").
   - `ArenaProvider` holds base/ER connections, the session key manager and the Railway auth token.
   - Keep `QueryClientProvider` and `CurrentMarketProvider`.
-- **P5.04** `NOT STARTED` (P0) — `hooks/use-current-market.ts` backed by the Arena subscription. Keep the exported API and `TARGET_MARKET_INTERVAL_SECONDS`.
-- **P5.05** `NOT STARTED` (P0) — `hooks/use-trade-setup.ts` + `lib/trade-setup.ts`: the Solana setup steps with the same step UI states. Each step is idempotent: skip when the account exists, is delegated, the session is valid, or the player has joined.
-- **P5.06** `NOT STARTED` (P0) — `hooks/use-trading.ts`:
+- **P5.04** `DONE` (P0) — `hooks/use-current-market.ts` backed by the Arena subscription. Keep the exported API and `TARGET_MARKET_INTERVAL_SECONDS`.
+- **P5.05** `DONE` (P0) — `hooks/use-trade-setup.ts` + `lib/trade-setup.ts`: the Solana setup steps with the same step UI states. Each step is idempotent: skip when the account exists, is delegated, the session is valid, or the player has joined.
+- **P5.06** `DONE` (P0) — `hooks/use-trading.ts`:
   - Same return keys. `placeTrade(outcome, side, amount, abilityId)` maps `abilityId` 1..4 to on-chain kinds.
   - `takeProfit` sells.
   - `claimRewards` calls `settle_player`.
   - Status messages from real results, including the ability settlement message from the `PositionSettled` event.
-- **P5.07** `NOT STARTED` (P0) — `lib/trading.ts`: replace the Somnia `UnifiedMarket` helpers with the `ArenaMarket` equivalents (keep the function names components use). Update `lib/__tests__/trading.test.ts` accordingly.
-- **P5.08** `NOT STARTED` (P0) — BTC chart (`features/chart-btc`, `lib/btc.ts`) from the oracle subscription. Market chart and trades (`use-market-trades/timeseries/history/closes`) from the Railway API + WS.
-- **P5.09** `NOT STARTED` (P0) — Traders/presence/heart (`use-traders`, `lib/traders.ts`, `use-heart-rate`) via WS, plus the on-chain `report_heart` throttle (≥5s, only while bpm is live).
+- **P5.07** `DONE` (P0) — `lib/trading.ts`: replace the Somnia `UnifiedMarket` helpers with the `ArenaMarket` equivalents (keep the function names components use). Update `lib/__tests__/trading.test.ts` accordingly.
+- **P5.08** `IN PROGRESS` (P0) — BTC chart (`features/chart-btc`, `lib/btc.ts`) from the oracle subscription. Market chart and trades (`use-market-trades/timeseries/history/closes`) from the Railway API + WS.
+- **P5.09** `IN PROGRESS` (P0) — Traders/presence/heart (`use-traders`, `lib/traders.ts`, `use-heart-rate`) via WS, plus the on-chain `report_heart` throttle (≥5s, only while bpm is live).
 - **P5.10** `NOT STARTED` (P0) — Leaderboard (`use-leaderboard`, `lib/leaderboard.ts`) from `/api/leaderboard`. Chat (`use-chat`) from WS/API with wallet-signed auth.
 - **P5.11** `NOT STARTED` (P0) — Progress (`use-progress`, `lib/progress.ts`) from Player on-chain stats, keeping `PROGRESS_TRACKS` and `progressTracks()`.
 - **P5.12** `NOT STARTED` (P0) — Users and display names (`use-users`, `use-display-name`) from `/api/profile`.
 - **P5.13** `NOT STARTED` (P0) — Copy: Somnia/dreamDEX/STT/tUSDC/0x formatting → Solana/devnet/chips/base58 short keys. Explorer links use `https://explorer.solana.com/tx/<sig>?cluster=devnet`; ER txs use the MagicBlock explorer (`?cluster=custom&customUrl=https://devnet-as.magicblock.app`).
-- **P5.14** `NOT STARTED` (P1) — New route `/proof`, added without touching existing components. Shows router delegation status for Arena/Player, the latest ER vs base latency sample, the last crank roll (ts, sig), the last VRF cheers (randomness, recipients), the last commit sig with a base explorer link, oracle price + publish-time age, and the program id/explorer.
+- **P5.14** `IN PROGRESS` (P1) — New route `/proof`, added without touching existing components. Shows router delegation status for Arena/Player, the latest ER vs base latency sample, the last crank roll (ts, sig), the last VRF cheers (randomness, recipients), the last commit sig with a base explorer link, oracle price + publish-time age, and the program id/explorer.
 - **P5.16** `NOT STARTED` (P0) — `features/status/index.tsx`: replace the hard-coded "Stable 57 MS | 50 FPS" (G-44) with a real rolling ER round-trip measured from the latest confirmed ER transactions or `getSlot` pings, plus a real `requestAnimationFrame` FPS. Keep the same markup.
 - **P5.17** `NOT STARTED` (P1) — `lib/format.ts`: format timestamps in the viewer's local timezone instead of the fixed GMT+7 (G-45). Update `lib/__tests__/format.test.ts`.
 - **P5.18** `NOT STARTED` (P0) — `lib/preload.ts` and `components/preload-gate.tsx`: preload from the Railway `/api/arena` snapshot and the first WS `snapshot`, drop the Firebase one-off gets, and remove the `/preload` special case (G-53).
@@ -419,9 +419,9 @@ rogs/
   - *Railway project `rogs-arena` d6a31546-6c7b-4070-baec-3a9fec690547, service `arena` 3e2e46cd-3a18-4d63-86f9-2559d9382e4f created 05:17 IST.*
   - *Accept:* `GET https://<domain>/health` returns `{ok:true, mongo:true, er:true, arena:{roundId}}`.
 - **P6.02** `DONE` (P0) — Atlas network access: confirm Railway can connect (the health `mongo:true`). If it's blocked → `BLOCKED` (the owner must add 0.0.0.0/0 in Atlas; no API key available).
-- **P6.03** `NOT STARTED` (P0) — Vercel: `vercel link` (project `rogs-arena`, root `apps/web`) → env vars → `vercel --prod`.
+- **P6.03** `DONE` (P0) — Vercel: `vercel link` (project `rogs-arena`, root `apps/web`) → env vars → `vercel --prod`.
   - *Accept:* the production URL loads with zero console errors.
-- **P6.04** `NOT STARTED` (P0) — Set CORS on Railway to the Vercel domain(s). Point the WS URL to `wss://<railway-domain>/ws`.
+- **P6.04** `DONE` (P0) — Set CORS on Railway to the Vercel domain(s). Point the WS URL to `wss://<railway-domain>/ws`.
 - **P6.05** `NOT STARTED` (P1) — Push to GitHub with a README deploy section; tag `blitz-v8-submission`.
 
 ### Phase 7 — Verification (target: 16:00 IST)
