@@ -2,6 +2,7 @@
 
 import { useArenaWallet } from '@/components/arena-wallet-provider'
 import { CHAT_MAX_LENGTH, useChat, type ChatMessage } from '@/hooks/use-chat'
+import { useArenaRealtime } from '@/lib/arena-realtime'
 import { useArenaAuth } from '@/hooks/use-arena-auth'
 import { resolveDisplayName } from '@/lib/display-name'
 import { errorMessage } from '@/lib/error'
@@ -115,9 +116,13 @@ export default function SectionChat() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const canSubmit = draft.trim().length > 0 && !sending && ready
+  // When the arena service is unreachable the realtime socket keeps reconnecting; say so instead of accepting input.
+  const offline = useArenaRealtime((state) => state.connection === 'reconnecting')
+  const canSubmit = draft.trim().length > 0 && !sending && ready && !offline
   const [chatError, setChatError] = useState<string | null>(null)
-  const placeholder = chatError ?? (!address ? 'Connect wallet to chat' : authenticated ? "What's that" : 'Sign in to chat')
+  const placeholder = offline
+    ? 'Chat is offline. Reconnecting to the arena…'
+    : (chatError ?? (!address ? 'Connect wallet to chat' : authenticated ? "What's that" : 'Sign in to chat'))
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current
