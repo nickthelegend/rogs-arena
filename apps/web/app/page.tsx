@@ -10,10 +10,12 @@ import SectionProgress from '@/features/progress'
 import SectionStatus from '@/features/status'
 import SectionAbout from '@/features/about'
 import SectionDynamicIsland from '@/features/dynamic-island'
+import { ViewportFit } from '@/components/viewport-fit'
 
 export default function Page() {
   return (
     <AbilityProvider>
+      <ViewportFit>
       <main className="w-screen h-screen bg-background relative p-2 flex flex-col gap-2">
         <SectionHeader />
         <div className="grid min-h-0 w-full flex-1 grid-cols-[400px_1fr_400px] gap-2">
@@ -37,6 +39,7 @@ export default function Page() {
           </div>
         </div>
       </main>
+      </ViewportFit>
     </AbilityProvider>
   )
 }
