@@ -1,0 +1,16 @@
+# Vercel only builds apps/web; upload the web app, the workspace packages it imports and the lockfile.
+/*
+!/apps
+/apps/*
+!/apps/web
+!/packages
+!/package.json
+!/bun.lock
+!/turbo.json
+!/.npmrc
+**/node_modules
+**/.next
+**/.turbo
+**/.env
+**/.env.*
+!**/.env.example
