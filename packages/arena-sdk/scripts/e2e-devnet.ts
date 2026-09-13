@@ -30,6 +30,7 @@ import {
   decodePlayer,
   ensurePlayerDelegated,
   explorerTxUrl,
+  fairCheersCandidates,
   fetchArena,
   fetchPlayer,
   keypairSigner,
@@ -210,28 +211,58 @@ async function main() {
     if (index === 1 && expected.cheers !== (after.cheersPending > 0)) throw new Error('cheers pending flag mismatch')
   }
 
-  // 9. Cheers via MagicBlock VRF (only reachable when the Cheers card won).
+  // 9. Cheers via MagicBlock VRF (only reachable when the Cheers card won). Fair Cheers requires every recent trader
+  //    except the winner as a candidate, so the set is read from the arena right before the request and re-read if a
+  //    trade lands in between. The live keeper may request it first; either way the VRF callback must pay.
   p2 = (await fetchPlayer(connections.er, players[1].publicKey))!
-  if (p2.cheersPending > 0) {
-    const p1Before = (await fetchPlayer(connections.er, players[0].publicKey))!
-    const seed = crypto.getRandomValues(new Uint8Array(32))
-    const request = await sendErTransaction(
-      connections.er,
-      [await instructions.requestCheers(players[1].publicKey, players[1].publicKey, [players[0].publicKey], seed)],
-      players[1],
-    )
-    record({ step: 'P2 request_cheers (VRF)', ok: true, detail: 'randomness requested on the ephemeral queue', signature: request.signature, ms: request.ms })
+  if (p2.cheersPending > 0 || p2.cheersInflight > 0) {
+    const snapshotCandidates = async () => {
+      const owners = fairCheersCandidates(await fetchArena(connections.er), players[1].publicKey)
+      return { owners, before: await Promise.all(owners.map((owner) => fetchPlayer(connections.er, owner))) }
+    }
+    let candidates = await snapshotCandidates()
+    if (p2.cheersInflight > 0) {
+      record({ step: 'P2 request_cheers (VRF)', ok: true, detail: 'the live keeper had already requested it' })
+    } else {
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const seed = crypto.getRandomValues(new Uint8Array(32))
+          const request = await sendErTransaction(
+            connections.er,
+            [await instructions.requestCheers(players[1].publicKey, players[1].publicKey, candidates.owners, seed)],
+            players[1],
+          )
+          record({ step: 'P2 request_cheers (VRF)', ok: true, detail: `randomness requested with all ${candidates.owners.length} recent traders as candidates`, signature: request.signature, ms: request.ms })
+          break
+        } catch (error) {
+          const now = (await fetchPlayer(connections.er, players[1].publicKey))!
+          if (now.cheersInflight > 0 || now.cheersPending === 0) {
+            record({ step: 'P2 request_cheers (VRF)', ok: true, detail: 'the live keeper requested it first' })
+            break
+          }
+          if (attempt === 3 || !/Cheers candidate/.test(String(error))) throw error
+          candidates = await snapshotCandidates()
+        }
+      }
+    }
     const paid = await waitFor(
       async () => {
-        const [winner, candidate] = await Promise.all([
+        const [winner, ...after] = await Promise.all([
           fetchPlayer(connections.er, players[1].publicKey),
-          fetchPlayer(connections.er, players[0].publicKey),
+          ...candidates.owners.map((owner) => fetchPlayer(connections.er, owner)),
         ])
-        return winner && candidate && winner.cheersInflight === 0 && candidate.cheersReceived > p1Before.cheersReceived ? candidate : null
+        const gains = after.map((player, index) => {
+          const previous = candidates.before[index]
+          return player && previous ? player.cheersReceived - previous.cheersReceived : 0n
+        })
+        const total = gains.reduce((sum, gain) => sum + gain, 0n)
+        return winner && winner.cheersPending === 0 && winner.cheersInflight === 0 && total > 0n
+          ? { total, recipients: gains.filter((gain) => gain > 0n).length }
+          : null
       },
-      { timeoutMs: 90_000, intervalMs: 1_500, label: 'the VRF cheers callback' },
+      { timeoutMs: 120_000, intervalMs: 1_500, label: 'the VRF cheers callback' },
     )
-    record({ step: 'VRF callback paid cheers', ok: paid.balance - p1Before.balance === 1n * USD, detail: `P1 cheers_received ${usd(paid.cheersReceived)} USD` })
+    record({ step: 'VRF callback paid cheers', ok: paid.total === BigInt(paid.recipients) * USD, detail: `${paid.recipients} of ${candidates.owners.length} candidates received 1 USD each (${usd(paid.total)} USD)` })
   } else {
     record({ step: 'cheers via VRF', ok: true, skipped: true, detail: 'the Cheers position did not finish in profit this run; e2e-cheers-vrf.ts exercises it deterministically' })
   }
