@@ -11,6 +11,7 @@ import {
   PRICE_DEFAULT_LOOKBACK_MS,
   PRICE_QUERY_LIMIT,
   PRICE_RETENTION_MS,
+  PriceHistory,
   PriceSampler,
   priceWindowStart,
   samplePrice,
@@ -221,6 +222,98 @@ describe('price sampler', () => {
     }
     const [sol] = await listPrices(db.cols, 'SOL', undefined, now)
     console.log(`[live] SOL/USD ${sol!.price} published ${new Date(sol!.t).toISOString()}`)
+  }, 30_000)
+})
+
+describe('price history in memory', () => {
+  test('answers only windows it covers from its start; repeated and out-of-order points are ignored', () => {
+    const started = 1_789_281_871_000
+    let now = started
+    const history = new PriceHistory(() => now)
+    history.add({ market: 'SOL', t: started - 5_000, price: 100 })
+    now = started + 10_000
+    history.add({ market: 'SOL', t: started + 8_000, price: 101 })
+    history.add({ market: 'SOL', t: started + 8_000, price: 999 })
+    history.add({ market: 'SOL', t: started + 7_000, price: 998 })
+
+    expect(history.list('SOL', started + 1_000)).toEqual([{ t: started + 8_000, price: 101 }])
+    expect(history.list('ETH', started + 1_000)).toEqual([])
+    // Before the start, and the default hour back, are not covered: the caller reads Mongo instead.
+    expect(history.list('SOL', started - 1_000)).toBeNull()
+    expect(history.list('SOL', undefined)).toBeNull()
+  })
+
+  test('returns the newest 2,000 oldest first and forgets points past retention', () => {
+    const started = 1_789_281_871_000
+    let now = started
+    const history = new PriceHistory(() => now)
+    const count = PRICE_QUERY_LIMIT + 150
+    for (let index = 0; index < count; index++) history.add({ market: 'BTC', t: started + index * 1_000, price: index })
+    now = started + count * 1_000
+    const rows = history.list('BTC', started)!
+    expect(rows).toHaveLength(PRICE_QUERY_LIMIT)
+    expect(rows[0]).toEqual({ t: started + 150_000, price: 150 })
+    expect(rows.at(-1)).toEqual({ t: started + (count - 1) * 1_000, price: count - 1 })
+
+    now = started + 7 * HOUR
+    history.add({ market: 'BTC', t: now, price: -1 })
+    expect(history.list('BTC', started)).toEqual([{ t: now, price: -1 }])
+  })
+
+  test('preload puts the stored last hour ahead of live points and covers that hour (Mongo)', async () => {
+    await db.cols.prices.deleteMany({})
+    const now = Date.now()
+    await savePrices(db.cols, [row('ETH', now - 2 * HOUR, 2_400), row('ETH', now - 50 * 60_000, 2_500), row('ETH', now - 10_000, 2_510)])
+    const history = new PriceHistory(() => now)
+    history.add({ market: 'ETH', t: now - 10_000, price: 2_510 })
+    history.add({ market: 'ETH', t: now - 1_000, price: 2_511 })
+    expect(history.list('ETH', now - 30 * 60_000)).toBeNull()
+
+    expect(await history.preload(db.cols, ['ETH', 'XRP'])).toEqual({ loaded: 2, failed: [] })
+    expect(history.list('ETH', now - 55 * 60_000)).toEqual([
+      { t: now - 50 * 60_000, price: 2_500 },
+      { t: now - 10_000, price: 2_510 },
+      { t: now - 1_000, price: 2_511 },
+    ])
+    expect(history.list('XRP', now - 30 * 60_000)).toEqual([])
+    expect(history.list('ETH', now - 2 * HOUR)).toBeNull()
+  }, 30_000)
+
+  test('the sampler adds every new point to the history', async () => {
+    await db.cols.prices.deleteMany({})
+    const { markets } = chain
+    const published = Math.floor(Date.now() / 1000)
+    const reader: FeedReader = {
+      getMultipleAccountsInfo: async () => markets.map((market, index) => feedAccount(market.oracleFeed, 100 + index, published)),
+    }
+    const history = new PriceHistory(() => (published - 60) * 1000)
+    const sampler = new PriceSampler(reader, markets, db.cols, serviceStatus(), history)
+    expect(await sampler.sample()).toBe(markets.length)
+    const sol = markets.findIndex(market => market.symbol === 'SOL')
+    expect(history.list('SOL', (published - 1) * 1000)).toEqual([{ t: published * 1000, price: 100 + sol }])
+  }, 30_000)
+})
+
+describe('GET /api/prices with the in-memory history', () => {
+  test('a covered window is served from memory and an older one from Mongo', async () => {
+    await db.cols.prices.deleteMany({})
+    const now = Date.now()
+    await savePrices(db.cols, [row('DOGE', now - 2 * HOUR, 0.08)])
+    const history = new PriceHistory()
+    const since = Date.now()
+    history.add({ market: 'DOGE', t: since + 5, price: 0.0841 })
+    const local = Bun.serve<SocketData>({
+      port: 0,
+      fetch: createFetchHandler({ env, database: db, chain, hub, status: serviceStatus(), priceHistory: history }),
+      websocket: hub.websocket,
+    })
+    try {
+      const url = `http://localhost:${local.port}`
+      expect(await (await fetch(`${url}/api/prices?market=DOGE&since=${since}`)).json()).toEqual([{ t: since + 5, price: 0.0841 }])
+      expect(await (await fetch(`${url}/api/prices?market=DOGE&since=${now - 3 * HOUR}`)).json()).toEqual([{ t: now - 2 * HOUR, price: 0.08 }])
+    } finally {
+      await local.stop(true)
+    }
   }, 30_000)
 })
 

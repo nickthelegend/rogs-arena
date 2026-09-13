@@ -7,7 +7,7 @@ import type { Env } from './env'
 import { HttpError } from './errors'
 import { requestFaucet } from './faucet'
 import { DEFAULT_MARKET } from './markets'
-import { listPrices } from './prices'
+import { listPrices, type PriceHistory } from './prices'
 import type { RealtimeHub, SocketData } from './realtime'
 import {
   arenaQuerySchema,
@@ -45,6 +45,8 @@ export type HttpContext = {
   chain: ArenaChain
   hub: RealtimeHub
   status: ServiceStatus
+  /** Recent prices kept by this process's sampler; /api/prices falls back to Mongo without it. */
+  priceHistory?: PriceHistory | null
 }
 
 type ArenaServer = Server<SocketData>
@@ -160,7 +162,7 @@ async function route(ctx: HttpContext, req: Request, url: URL, server: ArenaServ
       }
       case '/api/prices': {
         const { market, since } = parseInput(pricesQuerySchema, query)
-        return { data: await listPrices(cols, market, since) }
+        return { data: ctx.priceHistory?.list(market, since) ?? (await listPrices(cols, market, since)) }
       }
       case '/api/settlements':
         return { data: await listSettlements(cols, parseInput(settlementsQuerySchema, query)) }

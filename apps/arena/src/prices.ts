@@ -65,8 +65,81 @@ export async function listPrices(
     .find({ market, t: { $gte: priceWindowStart(since, now) } }, { projection: { _id: 0, t: 1, price: 1 } })
     .sort({ t: -1 })
     .limit(PRICE_QUERY_LIMIT)
+    // One batch instead of the driver's default 101 rows per round trip: an hour of history is about 1,800 rows.
+    .batchSize(PRICE_QUERY_LIMIT)
     .toArray()
   return docs.reverse() as PricePointDto[]
+}
+
+/**
+ * Recent prices per market in memory, fed by the sampler, so chart backfills do not wait on the database. An hour of
+ * history is about 1,800 rows and took seconds over a remote Atlas link, long enough for a few coin switches at once to
+ * hit the HTTP idle timeout. A window is answered only if this history covers all of it: from when the process
+ * started, or an hour back once that market was preloaded from Mongo. Anything older falls back to the database.
+ */
+export class PriceHistory {
+  private readonly points = new Map<string, PricePointDto[]>()
+  private readonly coveredFrom = new Map<string, number>()
+  private readonly startedAt: number
+
+  constructor(private readonly clock: () => number = Date.now) {
+    this.startedAt = clock()
+  }
+
+  /** Appends a sampled point. Repeated or out-of-order publish times are ignored; points past retention are dropped. */
+  add(point: { market: string; t: number; price: number }): void {
+    const points = this.points.get(point.market) ?? []
+    const last = points.at(-1)
+    if (last && point.t <= last.t) return
+    points.push({ t: point.t, price: point.price })
+    const firstKept = firstIndexAtOrAfter(points, this.clock() - PRICE_RETENTION_MS)
+    this.points.set(point.market, firstKept ? points.slice(firstKept) : points)
+  }
+
+  /** Loads each market's stored last hour, one market at a time. A market that fails keeps its narrower coverage. */
+  async preload(cols: Collections, markets: readonly string[]): Promise<{ loaded: number; failed: string[] }> {
+    let loaded = 0
+    const failed: string[] = []
+    for (const market of markets) {
+      const now = this.clock()
+      const from = now - PRICE_DEFAULT_LOOKBACK_MS
+      try {
+        const stored = await listPrices(cols, market, from, now)
+        // Points sampled while the query ran are newer than, or equal to, the stored ones they overlap.
+        const live = this.points.get(market) ?? []
+        const firstLive = live[0]?.t ?? Number.POSITIVE_INFINITY
+        this.points.set(market, [...stored.filter(point => point.t < firstLive), ...live])
+        this.coveredFrom.set(market, Math.min(from, this.coverageStart(market)))
+        loaded += stored.length
+      } catch (error) {
+        failed.push(`${market} (${errorMessage(error)})`)
+      }
+    }
+    return { loaded, failed }
+  }
+
+  /** The window from `since` under the same rules as the database query, or null when it is not fully covered. */
+  list(market: string, since: number | undefined, now = this.clock()): PricePointDto[] | null {
+    const from = priceWindowStart(since, now)
+    if (from < this.coverageStart(market)) return null
+    const points = this.points.get(market) ?? []
+    return points.slice(Math.max(firstIndexAtOrAfter(points, from), points.length - PRICE_QUERY_LIMIT))
+  }
+
+  private coverageStart(market: string): number {
+    return this.coveredFrom.get(market) ?? this.startedAt
+  }
+}
+
+function firstIndexAtOrAfter(points: readonly PricePointDto[], t: number): number {
+  let low = 0
+  let high = points.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (points[middle]!.t < t) low = middle + 1
+    else high = middle
+  }
+  return low
 }
 
 /**
@@ -84,6 +157,7 @@ export class PriceSampler {
     private readonly markets: readonly Market[],
     private readonly cols: Collections,
     private readonly status: ServiceStatus,
+    private readonly history: PriceHistory | null = null,
   ) {}
 
   start(): void {
@@ -92,6 +166,14 @@ export class PriceSampler {
       `[prices] sampling ${this.markets.length} oracle feeds (${this.markets.map(market => market.symbol).join(', ')}) on the ER every ${PRICE_SAMPLE_MS}ms`,
     )
     void this.sample()
+    if (this.history) {
+      const startedAt = Date.now()
+      void this.history.preload(this.cols, this.markets.map(market => market.symbol)).then(({ loaded, failed }) =>
+        console.log(
+          `[prices] preloaded ${loaded} stored points into memory in ${Date.now() - startedAt}ms${failed.length ? `; not loaded: ${failed.join(', ')}` : ''}`,
+        ),
+      )
+    }
   }
 
   async stop(): Promise<void> {
@@ -129,6 +211,8 @@ export class PriceSampler {
         }
       })
       if (!points.length) return 0
+      // Memory first, so backfills see the point even if the write fails; the re-read next tick is ignored as a repeat.
+      for (const point of points) this.history?.add(point)
       const stored = await savePrices(this.cols, points)
       // Advanced only after the write, so a point whose write failed is written next tick if the feed has not moved.
       for (const point of points) this.lastPublish.set(point.market, point.t / 1000)

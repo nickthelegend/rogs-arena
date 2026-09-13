@@ -4,7 +4,7 @@ import { env } from './env'
 import { createFetchHandler } from './http'
 import { Indexer } from './indexer'
 import { Keeper } from './keeper'
-import { PriceSampler } from './prices'
+import { PriceHistory, PriceSampler } from './prices'
 import { RealtimeHub, type SocketData } from './realtime'
 import type { ServiceStatus } from './types'
 import { errorMessage } from './util'
@@ -38,10 +38,13 @@ console.log(
 console.log(`[boot] markets ${chain.markets.map(market => `${market.symbol}=${market.arena.toBase58()}`).join(' ')}`)
 
 const hub = new RealtimeHub(database.cols)
+const priceHistory = env.PRICE_SAMPLER_ENABLED ? new PriceHistory() : null
 const server = Bun.serve<SocketData>({
   port: env.PORT,
   maxRequestBodySize: 64 * 1024,
-  fetch: createFetchHandler({ env, database, chain, hub, status }),
+  // Bun's default 10 s cut slow Mongo reads off with an empty response; give them room instead.
+  idleTimeout: 30,
+  fetch: createFetchHandler({ env, database, chain, hub, status, priceHistory }),
   websocket: hub.websocket,
 })
 hub.attach(server)
@@ -52,7 +55,7 @@ const indexer = env.INDEXER_ENABLED ? new Indexer(chain, database.cols, hub, sta
 indexer?.start()
 if (!indexer) console.log('[boot] indexer disabled')
 
-const sampler = env.PRICE_SAMPLER_ENABLED ? new PriceSampler(chain.er, chain.markets, database.cols, status) : null
+const sampler = env.PRICE_SAMPLER_ENABLED ? new PriceSampler(chain.er, chain.markets, database.cols, status, priceHistory) : null
 sampler?.start()
 if (!sampler) console.log('[boot] price sampler disabled')
 
