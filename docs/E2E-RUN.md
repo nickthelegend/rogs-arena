@@ -73,3 +73,27 @@ Run at 2026-09-13T00:00:03.566Z. Wallet `7qPBMRNjF9LgQNFHk2AbYHrojFK2ymJG4zyXdWT
 |---|---|---|---|
 | IDX-02 | NOT EXERCISED | attempt 1: the ~2s Railway restart was already over, so the service was up when the buy landed and backfill was never tested (/api/trades returned it 0s later via the live subscription). The re-test runs with the indexer disabled; see the next section | [2DddNbY2…](https://solscan.io/tx/2DddNbY2r6Xt1snsLzhhNPUvqWHL1rkj2kVp7aszoiwtMK3ezUwgAdXiWt3hGyTBGP825PwTGP87417BXpiyPRBT?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
 | KPR-01 | PASS | round 10 rolled at 1789257601; position settled 1s later by the keeper; payout 0 profit -5; the player never sent settle_player | [3fvVSGxE…](https://solscan.io/tx/3fvVSGxEFUthRP3VmHJJBHJBSKKWMbwrHy3ahHYN8vx4hKASrZYa6Cmukm59fdcQDZohdJCewFuTfxmmBNEoCuWu?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+
+## Keeper settlement and indexer backfill (Railway)
+
+Run at 2026-09-13T00:15:03.722Z. Wallet `AYUjvQx9x3Cdnw6nnbpZqLcx6o9kDELky2C56mP66THd`, round 13, buy [48jQpd4p…](https://solscan.io/tx/48jQpd4pSMZQtfurKdrdqYcMXgwUgLjDfXQXXWyKBjMFmvNsB7SiUXQCvnyvn9i4jgPEAwG3DDgmCTsQNdVhgC4r?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app).
+
+| Item | Result | Detail | Transaction |
+|---|---|---|---|
+| IDX-02 | PASS | service was down when the buy landed; /api/trades returned it 64s later | [48jQpd4p…](https://solscan.io/tx/48jQpd4pSMZQtfurKdrdqYcMXgwUgLjDfXQXXWyKBjMFmvNsB7SiUXQCvnyvn9i4jgPEAwG3DDgmCTsQNdVhgC4r?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| KPR-01 | PASS | round 13 rolled at 1789258501; position settled 2s later by the keeper; payout 0 profit -5; the player never sent settle_player | [5wPrSPt6…](https://solscan.io/tx/5wPrSPt61EkHCykPMg7zCCrJbGn7byzA424kQzvjKapfmHBeaUR52G5wkuEERgiDLiSHTtyFrsS8BgsHB6X4kjYs?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+
+## Keeper-driven Cheers via MagicBlock VRF (KPR-02)
+
+Run at 2026-09-13T01:05:07.128Z, round 23. P1 `trcZbBkneuEyDipagM4jodA7ZHoX2g6nDuVnvvK339r`, P2 `J7tfWQ3L2xzwRevektQ4Ba5S7gKYMRZ3PGsKepfFwPxn`.
+
+| Step | Result | Detail | Transaction |
+|---|---|---|---|
+| P2 buys YES $5 with the Cheers card | PASS | round 23 | [2Wxy93J4…](https://solscan.io/tx/2Wxy93J4xzeMe8RakXe8Nf9EwxSfSrvRVhLGCsxiBRsmnDP7DPK7cpCKMfRVCvP5NKgrrEKoNnWwkWCzJW1Pdqec?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 buys YES $90 (moves the AMM) | PASS | 148238266 shares | [2WQCtMsB…](https://solscan.io/tx/2WQCtMsByHGMPaHE8ghJdvyNnujScMViAW2bRbTqspfZ2k1PL4GY9qD6uQUmrR3qbXVLfwYRELgm2HEQ6y777i46?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P2 sells into the move at a profit | PASS | out 6.572087 USD vs cost 5 USD | [2RAXujme…](https://solscan.io/tx/2RAXujmeKqbaMyX5SDpoPxccRtUCSFmezxgKZgAXkXoJTj8iH3gZh5P1XRujvNbHnWGm9iVjDnxjmn71y6BxLaoF?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| P1 received Cheers after resolution | PASS | cheers_received 1 USD | — |
+| P2 settled by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [PE9kz5ce…](https://solscan.io/tx/PE9kz5ceFEfhNDfWqoGG2NC6jKBKyQiBuHfWnsWwqoXvRHZKPaNp7nDywXjoSDLziuJSLJqBYZBB1od2y8vX6Bx?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| request_cheers sent by the keeper | PASS | signer 59o1MkshqjC4oQcZsTCCn13BxDuFHGmNNrFfdYNhrj9r | [uvTQ8pGy…](https://solscan.io/tx/uvTQ8pGyYKNJSfUcoZ4vwCXnnQ5eWxThJY84e1cuoWFzjWLbBuLbw7LVXc3U438JwfPzjxxwVSNFSHbqwQHKXEv?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| VRF callback paid recent traders | PASS | recipients 10 (incl. P1), 1 USD each, randomness b186e4ee9a49627c… | [5LC56dLU…](https://solscan.io/tx/5LC56dLU8kzKNcEU7Z1ZyjDdQS6aV2JtcfN9kkqbGjb4WFpCmLHj4V9Ke1jJyddvnmNovXQDGuPhUPKoTMaTCf44?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| indexer stored the CheersPaid row | PASS | /api/cheers has 5LC56dLU8k… | — |
