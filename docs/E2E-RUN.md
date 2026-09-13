@@ -64,3 +64,12 @@ Run at 2026-09-12T23:41:13.669Z. Wallet `6dtg7sbLJqH4vkaFNPi79pKTpHQhbom4X5g6Eim
 | Player back under the program on Solana with ER state | PASS | owner J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q, base balance 250.000000 USD | — |
 | router reports undelegated | PASS | {"isDelegated":false} | — |
 | re-delegate Player, balance intact on the ER | PASS | ER balance 250.000000 USD | [2HBvpN1P…](https://explorer.solana.com/tx/2HBvpN1PwDy6wi9qKbh81XGCQgDhMQi1ikYvVr28podWyTQmnUJBmL1EDXcXh4M5szKJmx96hiSxeXJCzCxqUshR?cluster=devnet) |
+
+## Keeper settlement and indexer backfill (Railway)
+
+Run at 2026-09-13T00:00:03.566Z. Wallet `7qPBMRNjF9LgQNFHk2AbYHrojFK2ymJG4zyXdWTbiX3t`, round 10, buy [2DddNbY2…](https://solscan.io/tx/2DddNbY2r6Xt1snsLzhhNPUvqWHL1rkj2kVp7aszoiwtMK3ezUwgAdXiWt3hGyTBGP825PwTGP87417BXpiyPRBT?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app).
+
+| Item | Result | Detail | Transaction |
+|---|---|---|---|
+| IDX-02 | NOT EXERCISED | attempt 1: the ~2s Railway restart was already over, so the service was up when the buy landed and backfill was never tested (/api/trades returned it 0s later via the live subscription). The re-test runs with the indexer disabled; see the next section | [2DddNbY2…](https://solscan.io/tx/2DddNbY2r6Xt1snsLzhhNPUvqWHL1rkj2kVp7aszoiwtMK3ezUwgAdXiWt3hGyTBGP825PwTGP87417BXpiyPRBT?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |
+| KPR-01 | PASS | round 10 rolled at 1789257601; position settled 1s later by the keeper; payout 0 profit -5; the player never sent settle_player | [3fvVSGxE…](https://solscan.io/tx/3fvVSGxEFUthRP3VmHJJBHJBSKKWMbwrHy3ahHYN8vx4hKASrZYa6Cmukm59fdcQDZohdJCewFuTfxmmBNEoCuWu?cluster=custom&customUrl=https%3A%2F%2Fdevnet-as.magicblock.app) |

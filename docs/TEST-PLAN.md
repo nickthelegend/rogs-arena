@@ -8,7 +8,7 @@ are **UNTESTABLE** with the exact reason. Nothing is marked PASS by analogy.
 Environments:
 - **Chain:** Solana devnet + MagicBlock devnet-as ER. Program `J83qUBtZwGwgyA7Sta8Kbj1GTTA6qtUBLEnkDV8wA64q`, arena PDA `ApzYL11HC9puv4dbFk1QTCrE4wpLup8ta9QE2UKde2CJ`.
 - **Backend:** Railway `https://arena-production-0bdd.up.railway.app` (MongoDB Atlas DB `rogs_arena`).
-- **Frontend:** Vercel project `rogs-arena` (production URL filled in on first deploy).
+- **Frontend:** Vercel `https://rogs-arena.vercel.app`.
 - **Browser:** Claude in Chrome (real Chrome). Console + network are checked on every UI item.
 
 Methods: **B** = real browser against the deployed app. **S** = real signed devnet transactions from
@@ -78,8 +78,8 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 | WS-06 | round broadcast | B | At rollover a `round` frame arrives; the UI countdown resets to the new round | NOT RUN |
 | WS-07 | reconnect | B | Server restart or going offline → client reconnects and receives a fresh snapshot; no unhandled error | NOT RUN |
 | IDX-01 | Indexer persistence | H | Trades from an E2E run exist in Mongo with matching sigs | PASS: round-4 trades and settlements in Mongo carry the exact sigs of the on-chain ability run (3ubUoks…, 5tZKJEm…); backfill on Railway read 986 txs, 45 events, 0 failures |
-| IDX-02 | Backfill after restart | H | After redeploy, trades made while down appear in `/api/trades` | NOT RUN |
-| KPR-01 | Keeper settle fan-out | H | After resolution every trader of the round is settled within 30s without a manual `settle_player` | NOT RUN |
+| IDX-02 | Backfill after restart | H | After redeploy, trades made while down appear in `/api/trades` | PASS: `verify-keeper-settle.ts` bought while the Railway indexer was disabled (tx 48jQpd4p…, /health indexer.enabled=false); after INDEXER_ENABLED=true the backfill returned it in /api/trades 64s later |
+| KPR-01 | Keeper settle fan-out | H | After resolution every trader of the round is settled within 30s without a manual `settle_player` | PASS: `verify-keeper-settle.ts` round 10 rolled at 1789257601; the position settled 1s later in tx 3fvVSGxE…, signed by keeper 59o1…; the player never sent settle_player |
 | KPR-02 | Keeper cheers | H | A Cheers win gets `request_cheers` from the keeper and `CheersPaid` follows | NOT RUN |
 | KPR-03 | Keeper watchdog | H | Logs show the crank rolled the round and no duplicate roll tx | PASS: Railway log at 23:50:06 shows Crank rolled: round 8 -> round 9, last_roll_ts 1789257001 (1s after end); keeper.lastRollSig is null, so no duplicate roll tx |
 
@@ -120,7 +120,7 @@ Status legend: `NOT RUN` · `PASS` · `FAIL` · `UNTESTABLE (reason)`.
 |---|---|---|---|
 | DEP-01 | Railway deploy | Build succeeds, `/health` ok, logs show indexer subscribed and keeper running | PASS: the Dockerfile build succeeded (Railpack had detected Rust; fixed). Boot log shows mongo connected, indexer watching the program, keeper started; /health ok |
 | DEP-02 | Atlas from Railway | `/health.mongo=true` and writes visible in Atlas | PASS: /health mongo:true from Railway; probe user, session and faucet writes were read back through the API and then removed |
-| DEP-03 | Vercel deploy | Production build succeeds from apps/web with workspace packages | NOT RUN |
+| DEP-03 | Vercel deploy | Production build succeeds from apps/web with workspace packages | PASS: https://rogs-arena.vercel.app READY (dpl_2NrjTfYJv5NT323ysH2EP5rr9REX), built from apps/web with workspace packages; all 10 NEXT_PUBLIC vars match env.ts |
 | DEP-04 | GitHub | `main` contains all code; no secrets committed (`git grep` for key material and the Mongo URI returns nothing) | NOT RUN |
 
 ---
@@ -143,3 +143,4 @@ Findings and fixes are appended here per run: item ID, observed result, root cau
 | DEP-01 | The first `railway up` failed. Railpack detected Rust from the root `rust-toolchain.toml`, ran `cargo build --release`, and never installed Bun | Auto-detection keys on the repo root, which holds the Anchor workspace | Added `apps/arena/Dockerfile` (oven/bun 1.3.11, repo-root context, exec-form CMD for SIGTERM), set `RAILWAY_DOCKERFILE_PATH`, added `.dockerignore`. Start command is `bun run apps/arena/src/index.ts` | Deploy SUCCESS; boot log shows mongo, indexer, keeper |
 | IDX-02 (attempt 1) | The buy landed while the service was already back up, so the attempt was recorded as a FAIL instead of a backfill check | A Railway restart only takes ~2s (SIGTERM 23:55:15.97, boot 23:55:17.90); the flag went down at 23:55:24 | The script now counts the indexer as down when `/health.indexer.enabled` is false. The re-test runs with `INDEXER_ENABLED=false` during the trade | re-test pending |
 | KPR crank lifetime | The crank task ran 200,000 × 2s and would expire around 2026-09-17 14:18 UTC; the keeper only logged the stall | Nothing re-scheduled an expired task | The keeper sends `schedule_round_crank` with a fresh task id after 2 consecutive stalled rounds, with a 10-minute backoff and task-id parity with the SDK | 46/46 service tests, tsc 0; live path UNTESTABLE until the current task expires |
+| DEP-03 | The first `vercel --prod` upload aborted; the retry hit the free-tier limit of 5000 uploaded files per 24h | Without a `.vercelignore` the CLI uploaded the repo root, including target (1.9 GB) and node_modules | `.vercelignore` allow-list (apps/web, packages, lockfile), deployed with `--archive=tgz` (25 MB) | READY |
