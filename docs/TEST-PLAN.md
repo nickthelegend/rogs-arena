@@ -302,3 +302,4 @@ The first measurement found 43/50 = 86%; see `docs/COMPLETION.md` for the checkl
 | Web tsc / eslint / tests | clean / 0 problems / 272 pass |
 | Live app (Browser pane) | Guest setup 6 s; "Bought 23.7 YES for $5.00 in 209 ms"; "Sold 23.7 YES for $4.90 in 258 ms"; keeper settlement "paid $10.31, P/L +$5.31"; chat shown; 6 traders; SOL switch with logo and history; Save to Solana in 7 s; proof page with 9 delegated markets and oracle 2–7 s old; 375 px layout without overflow; 0 console messages |
 | CELL-4B pulse bridge | Answers, but `present:false` all run: no fingertip on the sensor, so device → chain is not verified |
+| `e2e-cheers-vrf` (re-run with the exact counter) | CHEERS VRF E2E PASSED: 15 candidates (every recent trader except the winner) requested on the ephemeral VRF queue; the callback paid 10 of 15 exactly 1 USD each, and the CheersPaid event was read from the callback transaction |
