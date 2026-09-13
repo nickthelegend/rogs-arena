@@ -25,7 +25,9 @@ Everything below was run against devnet and the ER, not read from code. Evidence
 - **Keeper honesty.** The keeper logged "Settled" for a settle that was a no-op; it now confirms `PositionSettled` in the transaction before logging.
 - **SIMD-0460 (live on devnet).** Every `del` field in this program is `AccountInfo`, so the re-serialization failure that the unreleased SDK now rejects at compile time cannot happen here.
 
-**Still genuinely missing:** Private ER / TEE, ephemeral SPL tokens, private payments, ephemeral accounts, fee-vault commits, router-routed transaction sending. **Still script-only (UI wiring in progress):** the badge Magic Action and commit receipts.
+**Now in the product (verified in the browser, MG-09):** the badges panel has "Save to Solana". A guest clicked it on the production build, the ER commit scheduled the post-commit Magic Action, and Solana txs 5fLeDBcg… and 2dc5c2oe… ran RecordBadges. The second save picked up the trade made in between (BadgeRecord trades 1 = ER player). The row links the rollup tx and the Solana commit resolved with GetCommitmentSignature.
+
+**Still genuinely missing:** Private ER / TEE, ephemeral SPL tokens, private payments, ephemeral accounts, fee-vault commits, router-routed transaction sending.
 
 ---
 
@@ -78,12 +80,12 @@ The last column covers the web UI. At audit time nothing there was wired; rows m
 | 10 | `commit_arena` | **GENUINELY USED (once, manually)** | `2qc96JkV…`: base went from round 0 / 0 trades to round 2 / 6 trades and stayed delegated. Update: the Railway keeper now commits every 12 resolved rounds (capped at 9 per delegation); the on-chain counter reached 2 and the Solana snapshot advanced to round 13 / 21 trades | `lib.rs:809-827`; `commit-arena.ts:36-44` | n/a |
 | 11 | `undelegate_player` (`commit_and_undelegate`) | **GENUINELY USED** (verified after the audit) | `scripts/verify-undelegate.ts`: ER tx `3sCuC1UP…` undelegated Player `ENnMBsqQ…`, which came back owned by the program on Solana with its 250.000000 USD ER balance. The router switched from `isDelegated: true` to `false`, and re-delegation `2HBvpN1P…` kept the balance on the ER. Section "Player undelegate and re-delegate" in `docs/E2E-RUN.md` | `lib.rs:843-853`; `tx.ts:228-233` | PENDING (not wired) |
 | 12 | Magic Router `getDelegationStatus` | **USED IN SCRIPTS ONLY** (corrected after the audit) | One call site: `scripts/check-delegation.ts`, which returned `isDelegated: true` and fqdn `devnet-as` for the Arena. The E2E uses `waitForDelegation`, which compares base/ER owners. Transactions go straight to `devnet-as`, not through the router. Web and service have no call site yet | `connections.ts:25-36`, `:58-69`; `check-delegation.ts:7`; `constants.ts:81-87` | PENDING |
-| 13 | Commitment signature (`GetCommitmentSignature`) | **GENUINELY USED (SDK + devnet script; UI pending)** — updated 05:40 UTC, MG-05 | PLAN §2.3 promises it; only the ER scheduling sig is recorded | — | — |
+| 13 | Commitment signature (`GetCommitmentSignature`) | **GENUINELY USED (SDK, devnet script MG-05, and the badges panel in the UI MG-09)** | PLAN §2.3 promises it; only the ER scheduling sig is recorded | — | — |
 | 14 | TS `@magicblock-labs/ephemeral-rollups-sdk`, `@magicblock-labs/gum-sdk` | **ephemeral-rollups-sdk now USED (`GetCommitmentSignature`, `packages/arena-sdk/src/commits.ts`); gum-sdk still IMPORTED BUT UNUSED** | Declared but never imported. Session calls use a bundled `gpl_session` IDL | `packages/arena-sdk/package.json:17-18` | — |
 | 15 | Private ER / TEE | **MISSING** | No `access-control` feature, no permission CPI | `Cargo.toml:24` | — |
 | 16 | Ephemeral SPL token | **MISSING** | Chips are a `u64` in `Player` | `state.rs:134` | — |
 | 17 | Private payments API | **MISSING** | — | — | — |
-| 18 | Magic Actions | **GENUINELY USED (devnet, script-triggered; UI pending)** — `commit_player_badges` + `record_badges`, MG-03/MG-04 | No `#[action]`, no `add_post_commit_actions` | — | — |
+| 18 | Magic Actions | **GENUINELY USED (devnet and the product UI)** — `commit_player_badges` + `record_badges`, MG-03/MG-04 (script), MG-09 (Save to Solana in the browser) | No `#[action]`, no `add_post_commit_actions` | — | — |
 | 19 | Ephemeral accounts | **MISSING** | Chat and presence live in Mongo / memory (`apps/arena/src/chat.ts`, `presence.ts`) | — | — |
 | 20 | Fee vault / delegated fee payer | **MISSING** | 10-commit cap applies (see 1.3) | `lib.rs:819-825` | — |
 | 21 | ER latency readout (web) | **FAKED at audit start, being fixed** | Hard-coded "Stable 57 MS \| 50 FPS". During the audit another agent replaced it with a `getSlot` RTT median | `apps/web/features/status/index.tsx:18` | PENDING LIVE BROWSER VERIFICATION |
@@ -179,7 +181,7 @@ Depth values:
 | 10 | VRF round draft | At round open the crank requests VRF and deals 2 cards per active player | VRF + crank | core | Crank and VRF chained with no server |
 | 11 | eSPL chips | CHIP mint; buy/sell move eATA balances inside the ER | eSPL | core | The docs' custody model for prediction markets |
 | 12 | Cash out to Solana | `commit_and_undelegate` plus an action that withdraws the eATA to the wallet | eSPL + Magic Actions | core | A full round trip from ER to wallet |
-| 13 | Badge record action **(DONE on devnet MG-03; UI pending)** | Commit Player; a post-commit action updates a base `BadgeRecord` PDA | Magic Actions | core | Durable achievements with no relayer |
+| 13 | Badge record action **(DONE in the product, MG-03 + MG-09)** | Commit Player; a post-commit action updates a base `BadgeRecord` PDA | Magic Actions | core | Durable achievements with no relayer |
 | 14 | Round archive action | `commit_arena` plus an action appending rounds to a base `RoundArchive` beyond 64 slots | Magic Actions | core | Complete history anyone can query on base |
 | 15 | 1 Hz heartbeat stream | `report_heart` every second at fee 0, with a live tx counter | ER (gasless) | core | Makes "why an ER" obvious |
 | 16 | Heartbeat duels | 1v1 calm-off in an ephemeral account; result committed to both Players | Ephemeral accounts + ER | core | New primitive, product-native |
@@ -190,7 +192,7 @@ Depth values:
 | 21 | BTC-vs-SOL pair rounds | Resolves on relative move of two feeds (SOL/USD `ENYwebBT…`) | Oracle | partial | FIXED and VERIFIED (UI-07): median of real getSlot RTTs to devnet-as (139-160 ms observed, non-constant) and requestAnimationFrame FPS |
 | 22 | Confidence-aware lock | Oracle `conf` widens the trade lock when spreads blow out | Oracle | partial | Uses oracle data beyond price |
 | 23 | Fee-vault commits | Delegated fee payer plus `magic_fee_vault` removes the 10-commit cap | Commit economics | partial | Shows the team read the fee model |
-| 24 | Commit receipts **(DONE in SDK MG-05; UI pending)** | Each ER commit is shown with its base commitment sig via `GetCommitmentSignature` | Commit | partial | Settlement a judge can verify |
+| 24 | Commit receipts **(DONE in the product, MG-05 + MG-09)** | Each ER commit is shown with its base commitment sig via `GetCommitmentSignature` | Commit | partial | Settlement a judge can verify |
 | 25 | Idle auto-undelegate | Per-player crank undelegates after 24 h idle | Crank + undelegate | partial | Lifecycle hygiene, reclaims deposits |
 | 26 | Multi-region arenas | Arenas on the asia, eu and us validators; router picks per player | ER + router | partial | Global latency story |
 | 27 | Session spend caps | Per-round max spend enforced for session-signed buys | Session keys | partial | Safe one-tap trading |

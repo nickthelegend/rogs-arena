@@ -28,17 +28,17 @@ An item counts only when it has been **verified against the real system** (devne
 | 18 | Service | Keeper settle, roll and commit per market, honest logs | DONE | MK-08, CH-19 settled by keeper |
 | 19 | Service | Auth, profile, faucet, chat on the redeployed service | DONE | verify-live-api 17/17 and verify-live-ws 11/11 against production after the multi-market redeploy |
 | 20 | Service | Railway deployment healthy | DONE | /health ok, 9 markets available |
-| 21 | Web | Coin selector for nine markets, verified in the browser | NOT VERIFIED | MK-09 |
-| 22 | Web | Trade a non-BTC market from the UI | NOT VERIFIED | MK-10 |
-| 23 | Web | Proof page for nine markets | NOT VERIFIED | MK-11 |
-| 24 | Web | ROGS branding, frog mascot, icon | NOT VERIFIED | BR-01, BR-02 (headless screenshots exist; browser pass pending) |
-| 25 | Web | Core flows regression on the multi-market build (guest, buy/sell, TP/SL, abilities, chat, leaderboard, history) | NOT VERIFIED | UI rows passed on the pre-multi-market build |
-| 26 | Web | Lint clean | NOT DONE | 10 errors, 6 warnings — being fixed |
+| 21 | Web | Coin selector for nine markets, verified in the browser | DONE | MK-09 (Claude in Chrome: URL, board switch, persistence, scoped requests; headless 390 px) |
+| 22 | Web | Trade a non-BTC market from the UI | DONE | MK-10: guest SOL buy from the island, ER tx writes the SOL arena, keeper settled it |
+| 23 | Web | Proof page for nine markets | DONE | MK-11 |
+| 24 | Web | ROGS branding, frog mascot, icon | DONE | BR-01, BR-02 |
+| 25 | Web | Core flows regression on the multi-market build (guest, buy/sell, TP/SL, abilities, chat, leaderboard, history) | IN PROGRESS | Found and fixed a real bug: returning guests stalled in setup (stale player read). Passing so far: fresh-guest join, SOL buy + keeper settlement, chat (Claude in Chrome and headless), outage resilience, selector, proof, badges. Re-running verify-fixes, flow, ws-browser after the fix |
+| 26 | Web | Lint clean | DONE | `bunx eslint .` 0 problems, tsc clean, 261 tests, build with no warnings |
 | 27 | Web | Zero console and network errors on the new build | NOT VERIFIED | — |
-| 28 | Web | Price chart labels readable | NOT DONE | Change label hidden under the price badge — being fixed |
-| 29 | Web | Usable mobile layout | NOT DONE | 390 px is a 27% zoom of desktop — being fixed |
-| 30 | Web | Badge Magic Action and commit receipts reachable in the UI | NOT DONE | Script-only today |
-| 31 | Deploy | Current frontend live on Vercel | BLOCKED | Every Vercel deploy since 00:24 UTC sits in UNKNOWN with no build; production serves an old build |
+| 28 | Web | Price chart labels readable | DONE | Plot starts below the label; final-1440-btc-top.png / final-1440-doge-top.png reviewed |
+| 29 | Web | Usable mobile layout | DONE | Stacked single column below 768 px; headless 390 px: no overflow, bottom-sheet selector, SOL switch, 0 errors |
+| 30 | Web | Badge Magic Action and commit receipts reachable in the UI | DONE | MG-09: two saves from the badges panel, Solana txs ran RecordBadges, record tracks the new trade |
+| 31 | Deploy | Current frontend live on Vercel | DONE | https://rogs-arena-app.vercel.app serves the fix build 566d698 (deployment c43s0zrrh, READY). Railway CORS allows the origin, and the WebSocket accepts it. Live page: 0 console errors, all requests 200. A returning guest joined on production in 4 s. GitHub main pushed to 566d698 |
 | 32 | Docs | Test plan, API contract, brand prompts | DONE | docs/TEST-PLAN.md, docs/ARENA-API.md, docs/brand/PROMPTS.md |
 | 33 | Docs | MagicBlock audit with the ranked 50 | DONE | docs/MAGICBLOCK-AUDIT.md (refreshed) |
 
@@ -57,3 +57,6 @@ Web scores zero because it changed substantially (nine markets, selector, brandi
 - **05:59 UTC — 20 of 33 = 61%.** Items #10 and #19 were re-verified on the current bytecode and the redeployed service.
 - **06:05 UTC — 21 of 33 = 64%.** Item #5: program guards 17/17 on the size-optimized upgrade #3 bytecode.
 - **06:09 UTC — 22 of 33 = 67%.** Item #8: keeper-driven Fair Cheers v2 on XRP (MG-07).
+- **06:24 UTC — 30 of 33 = 91%.** Items #21–#24 and #26–#30 were verified in the browser on the local production build and on-chain. Left: #25 (core-flow regression sweep), #27 (zero console and network errors across every flow), #31 (Vercel).
+- **06:58 UTC — still 30 of 33.** Vercel is no longer blocked: a fresh project built READY. The regression sweep found a returning-guest setup bug, now fixed and being re-verified live.
+- **07:03 UTC — 31 of 33 = 94%.** Item #31: the fresh Vercel project is live with the returning-guest fix and verified in the browser. Left: #25 and #27, which wait on the verify-fixes, flow and ws-browser re-runs against the fix build.
