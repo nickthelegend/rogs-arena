@@ -1,17 +1,13 @@
 'use client'
 
-import { currentMarketIds } from '@/hooks/use-current-market'
 import { useAbility } from '@/components/ability-provider'
 import { useHeartRate } from '@/hooks/use-heart-rate'
-import { useMarketTimeseries } from '@/hooks/use-market-timeseries'
-import { useMarketTrades } from '@/hooks/use-market-trades'
 import { useTrading } from '@/hooks/use-trading'
 import { formatShares } from '@/lib/format'
-import { floatingProfitsForTrader } from '@/lib/leaderboard'
 import { DEFAULT_TRADE_AMOUNT } from '@/lib/trading'
 import NumberFlow from '@number-flow/react'
 import Image from 'next/image'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import upTexture from '@/public/texture-up.png'
 import downTexture from '@/public/texture-down.png'
 import { BPM_TIMING } from './constants'
@@ -52,24 +48,15 @@ export default function PaneTradingZone({
     canTakeProfit,
     yesPosition,
     noPosition,
-    address,
-    market,
+    exitQuotes,
     isTakingProfit,
     placeTrade,
     takeProfit,
   } = useTrading()
   const { applied, bindApplied } = useAbility()
   const [amount, setAmount] = useState(DEFAULT_TRADE_AMOUNT)
-  const marketIds = useMemo(() => currentMarketIds(market), [market])
-  const { trades } = useMarketTrades(marketIds)
-  const { points } = useMarketTimeseries(marketIds)
-  const latest = points.at(-1)
-  const yesMark = latest?.yes
-  const noMark = latest?.no ?? (yesMark == null ? undefined : 1 - yesMark)
-  const profits = useMemo(
-    () => floatingProfitsForTrader(trades, { yes: yesMark, no: noMark }, address),
-    [address, noMark, trades, yesMark],
-  )
+  // Valued at what a sell pays right now (AMM quote after the fee), so TP/SL and PnL match the actual fill.
+  const profits = { YES: exitQuotes.YES?.profit ?? 0, NO: exitQuotes.NO?.profit ?? 0 }
   const floatingProfit = profits.YES + profits.NO
   const yesExit = exitLabel(profits.YES)
   const noExit = exitLabel(profits.NO)
@@ -563,7 +550,19 @@ export default function PaneTradingZone({
           Back
         </button>
         <p className={`max-w-[220px] truncate pb-2 font-sans text-[11px] ${statusTone}`} aria-live="polite">
-          {detail}
+          {status?.explorerUrl ? (
+            <a
+              href={status.explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open this transaction on the MagicBlock ER explorer"
+              className="pointer-events-auto cursor-pointer underline-offset-2 hover:underline"
+            >
+              {detail}
+            </a>
+          ) : (
+            detail
+          )}
         </p>
       </div>
     </div>

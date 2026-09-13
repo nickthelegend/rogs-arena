@@ -21,6 +21,7 @@ import {
   outcomeCode,
   outcomePositions,
   positionTotal,
+  exitQuotesFor,
   roundPosition,
   sellablePositions,
   sellQuote,
@@ -97,6 +98,7 @@ function useTradingController() {
   const position = roundPosition(player, market?.roundId)
   const positionAbility =
     position && (position.yesShares > 0n || position.noShares > 0n) && position.proceeds === 0n ? position.ability : null
+  const exitQuotes = exitQuotesFor(market, position)
 
   useEffect(() => {
     if (playerError) setStatus({ tone: 'error', message: playerError })
@@ -374,6 +376,8 @@ function useTradingController() {
     attachAbility,
     /** Ability code on the open-round position, 0 when none, null when there is no attachable position. */
     positionAbility,
+    /** Executable exit per side: AMM sell quote after the fee, and its profit against cost basis. */
+    exitQuotes,
   }
 }
 

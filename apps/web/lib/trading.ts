@@ -251,6 +251,31 @@ export function formatClaimResultMessage(settledCount: number) {
   return `Settled ${settledCount} position${settledCount === 1 ? '' : 's'}.`
 }
 
+export type ExitQuote = { out: number; profit: number }
+
+/**
+ * What selling each side of the open position pays right now: the program's AMM sell quote on the live
+ * pools, after the fee, minus that side's cost basis. This is exactly what `sell` realizes, unlike a
+ * mark-price estimate, so TP/SL labels and island PnL match the fill.
+ */
+export function exitQuotesFor(
+  market: Pick<ArenaMarket, 'yesPool' | 'noPool' | 'feeBps'> | null,
+  position: Pick<PositionState, 'yesShares' | 'noShares' | 'basisYes' | 'basisNo'> | null,
+): Record<Outcome, ExitQuote | null> {
+  const quote = (outcome: Outcome): ExitQuote | null => {
+    if (!market || !position) return null
+    const shares = outcome === 'YES' ? position.yesShares : position.noShares
+    if (shares <= 0n) return null
+    const sold = outcome === 'YES' ? market.yesPool : market.noPool
+    const other = outcome === 'YES' ? market.noPool : market.yesPool
+    const result = quoteSell(sold, other, shares, market.feeBps)
+    if (!result) return null
+    const basis = outcome === 'YES' ? position.basisYes : position.basisNo
+    return { out: chipsToUsd(result.out), profit: chipsToUsd(result.out - basis) }
+  }
+  return { YES: quote('YES'), NO: quote('NO') }
+}
+
 export function withAbilityMessage(message: string, note?: string | null) {
   return note ? `${message} ${note}` : message
 }

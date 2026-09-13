@@ -17,6 +17,7 @@ import {
   buyQuote,
   canPlaceTrade,
   canTakeProfit,
+  exitQuotesFor,
   formatPositionLine,
   formatSettlementMessage,
   formatTakeProfitResultMessage,
@@ -201,5 +202,28 @@ describe('result copy', () => {
     expect(
       abilitySettlementNote({ roundId: 41, payout: 6n * USD, profit: USD, ability: ABILITY_CHEERS, bonus: 0n, calm: false, cheers: true }),
     ).toBe('Cheers won: MagicBlock VRF will pick up to 10 traders to receive $1 each.')
+  })
+})
+
+describe('exitQuotesFor', () => {
+  // Real devnet round 14: an empty 200/200 pool, fee 100 bps, one $5 YES buy, then TP.
+  // On chain the sell realized proceeds 4.900500 and PnL -0.099500 (tx 4uGdMzDF…).
+  const liquidity = 200_000_000n
+  const feeBps = 100n
+  const buy = quoteBuy(liquidity, liquidity, 5_000_000n, feeBps)!
+  const market = { yesPool: buy.poolBought, noPool: buy.poolOther, feeBps }
+  const position = { yesShares: buy.shares, noShares: 0n, basisYes: 5_000_000n, basisNo: 0n }
+
+  test('matches the executed sell, fee included', () => {
+    expect(buy.shares).toBe(9_780_446n)
+    const quotes = exitQuotesFor(market, position)
+    expect(quotes.YES).toEqual({ out: 4.9005, profit: -0.0995 })
+    expect(quotes.NO).toBeNull()
+  })
+
+  test('is null without a market, position or shares', () => {
+    expect(exitQuotesFor(null, position)).toEqual({ YES: null, NO: null })
+    expect(exitQuotesFor(market, null)).toEqual({ YES: null, NO: null })
+    expect(exitQuotesFor(market, { ...position, yesShares: 0n })).toEqual({ YES: null, NO: null })
   })
 })
