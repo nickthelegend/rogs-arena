@@ -50,6 +50,9 @@ export class Indexer {
   private catchUpTimer: ReturnType<typeof setTimeout> | null = null
   private pulsing = false
   private readonly stateKeys = new Map<string, string>()
+  private readonly liveKeys = new Map<string, string>()
+  private readonly syncingMarkets = new Set<string>()
+  private readonly pendingArenas = new Map<string, ArenaAccount>()
   private readonly historyKeys = new Map<string, string>()
   private readonly roundKeys = new Map<number, string>()
   private readonly warn = throttled(30_000)
@@ -216,11 +219,34 @@ export class Indexer {
   private async onArenaAccount(market: Market, data: Buffer): Promise<void> {
     try {
       const arena = this.chain.decodeArena(data)
-      if (arena.market === market.id) await this.syncArena(market, arena)
+      if (arena.market === market.id) await this.queueArenaSync(market, arena)
     } catch (error) {
       this.warn(`arena-account:${market.symbol}`, () =>
         console.warn(`[indexer] ${market.symbol} arena update failed: ${errorMessage(error)}`),
       )
+    }
+  }
+
+  /**
+   * One sync per market at a time; reads that arrive meanwhile collapse into the newest, applied right after.
+   * Without this, notifications landing while a slow write was still in flight all saw the old change keys and
+   * wrote the same round again, which kept the shared database saturated.
+   */
+  private async queueArenaSync(market: Market, arena: ArenaAccount): Promise<void> {
+    if (this.syncingMarkets.has(market.symbol)) {
+      this.pendingArenas.set(market.symbol, arena)
+      return
+    }
+    this.syncingMarkets.add(market.symbol)
+    try {
+      let next: ArenaAccount | undefined = arena
+      while (next) {
+        this.pendingArenas.delete(market.symbol)
+        await this.syncArena(market, next)
+        next = this.pendingArenas.get(market.symbol)
+      }
+    } finally {
+      this.syncingMarkets.delete(market.symbol)
     }
   }
 
@@ -230,7 +256,15 @@ export class Indexer {
     const roundId = toNumber(current.id)
     // A freshly initialized market arena holds its bare base id (round number 0) until the first roll.
     if (roundNumberOf(roundId) > 0) {
-      await syncRoundFromChain(this.cols, roundFromState(current))
+      // The ER pushes a notification for every write to the arena and the heartbeat re-reads it every 5 s, so an
+      // unconditional upsert ran ~20 writes/s per market and throttled the shared database. Only changes are written;
+      // the key is kept after a successful write, so a failed one is retried on the next read.
+      const live = roundFromState(current)
+      const liveKey = JSON.stringify(live, (_, value: unknown) => (typeof value === 'bigint' ? value.toString() : value))
+      if (liveKey !== this.liveKeys.get(market.symbol)) {
+        await syncRoundFromChain(this.cols, live)
+        this.liveKeys.set(market.symbol, liveKey)
+      }
       const key = `${roundId}:${current.status}`
       if (key !== this.stateKeys.get(market.symbol)) {
         this.stateKeys.set(market.symbol, key)
@@ -273,7 +307,7 @@ export class Indexer {
       await mapLimit(arenas, PULSE_CONCURRENCY, async ({ market, account }) => {
         if (!account) return
         try {
-          await this.syncArena(market, account)
+          await this.queueArenaSync(market, account)
           const { current } = account
           if (current.status !== ROUND_OPEN || now >= toNumber(current.endTs) * 1000) return
           const roundId = toNumber(current.id)
