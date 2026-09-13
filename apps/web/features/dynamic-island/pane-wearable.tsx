@@ -37,13 +37,15 @@ export default function PaneWearable({
           >
             Try again
           </IslandButton>
-          <IslandButton
-            onClick={() => void heartRate.connect({ prompt: true })}
-            busy={heartRate.busy}
-            className="bg-white/10 text-white"
-          >
-            Pair a different device
-          </IslandButton>
+          {heartRate.canPair ? (
+            <IslandButton
+              onClick={() => void heartRate.connect({ prompt: true })}
+              busy={heartRate.busy}
+              className="bg-white/10 text-white"
+            >
+              Pair a different device
+            </IslandButton>
+          ) : null}
         </div>
       </div>
     )
@@ -141,7 +143,7 @@ export default function PaneWearable({
       className="flex flex-1 flex-col items-center justify-center rounded-xl bg-black px-6 text-white transition-transform duration-[160ms] [transition-timing-function:var(--ease-out)] enabled:active:scale-[0.97] disabled:cursor-wait"
     >
       <span className="font-abc-gravity-italic text-[28px] leading-none">CONNECT WEARABLE</span>
-      <span className="mt-2 font-sans text-xs text-white/60">BLE heart-rate monitor</span>
+      <span className="mt-2 font-sans text-xs text-white/60">{heartRate.sourceLabel}</span>
     </button>
   )
 }

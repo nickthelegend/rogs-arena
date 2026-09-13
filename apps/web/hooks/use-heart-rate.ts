@@ -15,7 +15,9 @@ import {
   type HeartRateContact,
   type HeartRateRememberedDevice,
 } from '@/lib/heart-rate'
+import { env } from '@/env'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { usePulseBridgeHeartRate } from '@/hooks/use-pulse-bridge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type HeartRateStatus = 'unsupported' | 'idle' | 'requesting' | 'connecting' | 'live' | 'error'
@@ -32,6 +34,18 @@ export type HeartRateState = {
   contact: HeartRateContact | null
   error: string | null
   remembered: HeartRateRememberedDevice | null
+}
+
+export type HeartRateHook = HeartRateState & {
+  connect: (options?: HeartRateConnectOptions) => Promise<void>
+  disconnect: () => Promise<void>
+  forget: () => Promise<void>
+  busy: boolean
+  live: boolean
+  /** What the wearable pane calls the source before connecting. */
+  sourceLabel: string
+  /** Whether "pair a different device" means anything for this source. */
+  canPair: boolean
 }
 
 type HeartRateSession = {
@@ -73,7 +87,7 @@ async function permittedHeartRateDevice(bluetooth: Bluetooth, remembered: HeartR
   return findRememberedBluetoothDevice(devices, remembered)
 }
 
-export function useHeartRate() {
+function useBluetoothHeartRate(): HeartRateHook {
   const [state, setState] = useState<HeartRateState>(idleState)
   const sessionRef = useRef<HeartRateSession | null>(null)
   const generationRef = useRef(0)
@@ -325,5 +339,15 @@ export function useHeartRate() {
     forget,
     busy: state.status === 'requesting' || state.status === 'connecting',
     live: state.status === 'live',
+    sourceLabel: 'BLE heart-rate monitor',
+    canPair: true,
   }
 }
+
+/**
+ * The player's heart rate: a Bluetooth LE heart-rate monitor, or the CELL-4B pulse bridge on the LAN when
+ * NEXT_PUBLIC_PULSE_BRIDGE_URL is set. Chosen once per build, so the same hook runs on every render.
+ */
+export const useHeartRate: () => HeartRateHook = env.NEXT_PUBLIC_PULSE_BRIDGE_URL
+  ? usePulseBridgeHeartRate
+  : useBluetoothHeartRate

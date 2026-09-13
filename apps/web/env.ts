@@ -18,6 +18,8 @@ export const env = createEnv({
     NEXT_PUBLIC_ORACLE_BTC_FEED: base58Key,
     NEXT_PUBLIC_ARENA_API_URL: httpUrl,
     NEXT_PUBLIC_ARENA_WS_URL: wsUrl,
+    /** Optional: the CELL-4B pulse bridge on the LAN (tools/cell4b-heart-bridge), used instead of Web Bluetooth. */
+    NEXT_PUBLIC_PULSE_BRIDGE_URL: httpUrl.optional(),
   },
   experimental__runtimeEnv: {
     NEXT_PUBLIC_SOLANA_CLUSTER: process.env.NEXT_PUBLIC_SOLANA_CLUSTER,
@@ -30,6 +32,7 @@ export const env = createEnv({
     NEXT_PUBLIC_ORACLE_BTC_FEED: process.env.NEXT_PUBLIC_ORACLE_BTC_FEED,
     NEXT_PUBLIC_ARENA_API_URL: process.env.NEXT_PUBLIC_ARENA_API_URL,
     NEXT_PUBLIC_ARENA_WS_URL: process.env.NEXT_PUBLIC_ARENA_WS_URL,
+    NEXT_PUBLIC_PULSE_BRIDGE_URL: process.env.NEXT_PUBLIC_PULSE_BRIDGE_URL,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

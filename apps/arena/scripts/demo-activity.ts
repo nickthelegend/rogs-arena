@@ -50,7 +50,8 @@ import {
 const minutes = Number(process.argv[2] ?? 45)
 const API = (process.argv[3] ?? 'https://arena-production-0bdd.up.railway.app').replace(/\/$/, '')
 const WS_URL = `${API.replace(/^http/, 'ws')}/ws`
-const KEY_FILE = '/private/tmp/claude-501/-Volumes-Extreme-SSD-Projects-rogs/d1d6270e-9033-4edf-8300-81396531a54b/scratchpad/demo-bots.json'
+// Beside the other keypairs, so the same bot players survive reboots (a temp directory was cleared once).
+const KEY_FILE = process.env.DEMO_BOTS_KEY ?? `${homedir()}/.config/solana/rogs-demo-bots.json`
 const BOT_NAMES = ['Rogbot Kestrel', 'Rogbot Marlin', 'Rogbot Ember', 'Rogbot Quill', 'Rogbot Nova']
 const MIN_LAMPORTS = 0.015 * LAMPORTS_PER_SOL
 const TOP_UP_LAMPORTS = 0.03 * LAMPORTS_PER_SOL
@@ -93,6 +94,7 @@ type Bot = {
   session: SessionKey | null
   token: string | null
   socket: WebSocket | null
+  refreshing: boolean
   pendingExit: { market: number; roundId: number; outcome: OutcomeCode; at: number } | null
 }
 
@@ -106,7 +108,7 @@ function loadBots(): Bot[] {
   const bots = BOT_NAMES.map((name) => {
     const keypair = stored[name] ? Keypair.fromSecretKey(bs58.decode(stored[name])) : Keypair.generate()
     stored[name] = bs58.encode(keypair.secretKey)
-    return { name, keypair, session: null, token: null, socket: null, pendingExit: null } satisfies Bot
+    return { name, keypair, session: null, token: null, socket: null, refreshing: false, pendingExit: null } satisfies Bot
   })
   writeFileSync(KEY_FILE, JSON.stringify(stored), { mode: 0o600 })
   return bots
@@ -144,17 +146,37 @@ function openChat(bot: Bot) {
   }
   socket.onmessage = (event) => {
     const frame = JSON.parse(String(event.data))
-    if (frame.type === 'error') log(bot.name, `chat error frame: ${frame.error}`)
+    if (frame.type !== 'error') return
+    log(bot.name, `chat error frame: ${frame.error}`)
+    // A socket that reconnected with an expired sign-in is anonymous: sign in again and reopen.
+    if (/sign in/i.test(String(frame.error))) void refreshChat(bot)
   }
   socket.onclose = () => {
     if (presence) clearInterval(presence)
+    if (bot.socket !== socket) return
     bot.socket = null
-    // Reconnect after a service restart so the bot stays online in the traders list.
+    // Reconnect after a service restart so the bot stays online in the traders list, with a fresh sign-in.
     setTimeout(() => {
-      if (!bot.socket && bot.token) openChat(bot)
+      if (!bot.socket) void refreshChat(bot)
     }, 5_000)
   }
   bot.socket = socket
+}
+
+async function refreshChat(bot: Bot) {
+  if (bot.refreshing) return
+  bot.refreshing = true
+  try {
+    await signIn(bot)
+    const previous = bot.socket
+    openChat(bot)
+    previous?.close()
+    log(bot.name, 'signed in again and reopened chat')
+  } catch (error) {
+    log(bot.name, `chat sign-in failed: ${describe(error)}`)
+  } finally {
+    bot.refreshing = false
+  }
 }
 
 async function setUp(bot: Bot, deployer: Keypair) {
