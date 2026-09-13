@@ -1,70 +1,104 @@
-# Rogs Arena — honest completion measurement
+# Rogs Arena: honest completion measurement
 
-What "100%" means here comes from the project itself: `PLAN.md`, the Blitz v8 rules (every submission must integrate MagicBlock Ephemeral Rollups), and the owner's requests. Those requests are to keep every rizz-club UI component, run nine coin markets including SOL, rebrand to ROGS with a new mascot, host the frontend on Vercel and the backend on Railway, and use no mocks.
+## What 100% means for this project
 
-An item counts only when it has been **verified against the real system** (devnet, the MagicBlock ER, the live Railway service, or a browser on the real app). Anything that merely exists, compiles, or passed on older bytecode or an older build is **not** counted.
+The checklist is built from the project itself, not from a generic list:
+- **`PLAN.md` §1.1:** the ten points of "done", and §1.2 (proof page, honesty).
+- **`PLAN.md` Phases 6–9:** deploy, verification, audits, submission package.
+- **The Blitz v8 rules:** MagicBlock Ephemeral Rollups are mandatory, and the form needs a website, a readable repo and program addresses.
+- **The owner's requests:** nine coins, ROGS branding, no mocks, coin logos, live demo traders, a real wallet flow and a real heart sensor.
 
-## Baseline — 2026-09-13 05:55 UTC
+An item counts only when it was **run** against the real system in this measurement: devnet, the MagicBlock ER, Railway, MongoDB Atlas, or a browser on https://rogs-arena-app.vercel.app. Existing, compiling, or passing in an older run does not count.
 
-| # | Area | Item | Status | Evidence / gap |
+The grep for mock, stub, TODO, fixme, fake, dummy and placeholder across tracked source found no stand-in logic:
+- **`stub`** is a layout constant in `section-history.tsx`.
+- **`placeholder`** is the chat input's HTML attribute, plus the oracle's rejection of zero-value placeholder feeds.
+- **`fake`** appears only in comments and old notes in `PLAN.md`.
+
+## First measurement: 2026-09-13 10:50–11:05 UTC → 43/50 = 86%
+
+| # | Gap | Where |
+|---|---|---|
+| G1 | Devnet E2E failed at Cheers (`CheersCandidatesIncomplete`): the script sent one candidate while other traders were active | `packages/arena-sdk/scripts/e2e-devnet.ts` (also `e2e-cheers-vrf.ts`) |
+| G2 | Calm pulse bonus not verified in this measurement: the E2E died before settlement | same run |
+| G3 | Real heart rate from a device written on-chain: not verified. The CELL-4B bridge was up but reported no pulse (no finger on the sensor) | `tools/cell4b-heart-bridge`, `apps/web/hooks/use-pulse-bridge.ts` |
+| G4 | README still described the old Rizz Club on Somnia/dreamDEX | `README.md` |
+| G5 | `docs/JUDGE-REPORT.md` missing (PLAN P8.02) | `docs/` |
+| G6 | `docs/COMPLETION.md` stale (07:21) | this file |
+| G7 | GitHub repo private (judges can't read it); no submission tag | `nickthelegend/rogs-arena` |
+
+## Fixes
+
+- **G1:** both Cheers scripts now read the complete recent-trader set from the arena right before the request, re-read it if a trade lands in between, and tolerate the live keeper requesting first (commit 25ea4f0). Re-run: `e2e-devnet.ts` **20/20 PASS** at 11:10 UTC. Fair Cheers v2 and the deterministic Cheers VRF run are recorded below.
+- **G2:** the same E2E settled P1 with **bonus $10.00, calm true, calmWins 1**, after `report_heart` 80 bpm on-chain.
+- **G4:** README rewritten with pitch, live links, gameplay, MagicBlock map with code locations, architecture diagram, run steps, env names, verification commands, addresses, and "what this does not prove" (9a202d8).
+- **G5:** `docs/JUDGE-REPORT.md` written from a five-minute pass against the live app (9a202d8).
+- **G6:** this file.
+- **G7:** full git history scanned for secrets: no env files, keypairs, Mongo URIs or private keys were ever committed. With the owner's go-ahead the repo was made **public**; an anonymous request to github.com/nickthelegend/rogs-arena returns 200. The tag `blitz-v8-submission` is pushed.
+- **G3:** still open. It needs a steady fingertip reading on the physical sensor, which only the owner can provide.
+
+## Re-measurement of the whole checklist (11:05–11:35 UTC)
+
+| # | Area | Item | Status | Evidence (this measurement) |
 |---|---|---|---|---|
-| 1 | Chain | Nine market arenas delegated to the MagicBlock ER | DONE | MK-01 |
-| 2 | Chain | Strike and close from the MagicBlock oracle inside the ER, nine feeds | DONE | MK-02, MK-03, CH-04 |
-| 3 | Chain | Crank rolls every market with no manual roll | DONE | MK-04 (after each of the three upgrades) |
-| 4 | Chain | Player delegation, Gum session keys, gasless ER trades | DONE | E2E 20/20 (Run 3), CH-05/06/10 |
-| 5 | Chain | Program guards (limits, slippage, locks, ability rules, authority) | DONE | test-guards 17/17 on upgrade #3 bytecode (CH-07, 09, 11, 12, 13, 15, 16, 17, 21, 23) |
-| 6 | Chain | Ability bonuses (Double, Protect, Calm) | DONE | CH-19 (Run 3), E2E Calm bonus |
-| 7 | Chain | Fair Cheers v2 through MagicBlock VRF | DONE | MG-01 (two live runs), MG-02 |
-| 8 | Chain | Keeper-driven Cheers under Fair Cheers v2 | DONE | MG-07: keeper settled, requested with the full candidate set, VRF callback paid, indexer stored it |
-| 9 | Chain | Commits to Solana (player and arena) | DONE | E2E commit_player; keeper commit 7/9 (MK-08) |
-| 10 | Chain | Player undelegate and re-delegate | DONE | Re-run on upgrade #3 bytecode (05:58 UTC): undelegated to Solana with 250 USD intact, router isDelegated false, re-delegated with balance intact |
-| 11 | Chain | Badges written on Solana by a Magic Action | DONE | MG-03, MG-04 |
-| 12 | Chain | Commit receipts via GetCommitmentSignature | DONE | MG-05 |
-| 13 | Chain | Multi-market authority and account guards | DONE | MK-05 |
-| 14 | Chain | Upgrades verified byte for byte; reproducible build | DONE | MK-00, MG-06, MG-08 |
-| 15 | Service | REST API including markets | DONE | MK-06 |
-| 16 | Service | WebSocket realtime including market switch | DONE | MK-07 |
-| 17 | Service | Indexer persistence per market | DONE | MK-06 (ETH round 5 trades and settlements indexed), IDX-01/02 |
-| 18 | Service | Keeper settle, roll and commit per market, honest logs | DONE | MK-08, CH-19 settled by keeper |
-| 19 | Service | Auth, profile, faucet, chat on the redeployed service | DONE | verify-live-api 17/17 and verify-live-ws 11/11 against production after the multi-market redeploy |
-| 20 | Service | Railway deployment healthy | DONE | /health ok, 9 markets available |
-| 21 | Web | Coin selector for nine markets, verified in the browser | DONE | MK-09 (Claude in Chrome: URL, board switch, persistence, scoped requests; headless 390 px) |
-| 22 | Web | Trade a non-BTC market from the UI | DONE | MK-10: guest SOL buy from the island, ER tx writes the SOL arena, keeper settled it |
-| 23 | Web | Proof page for nine markets | DONE | MK-11 |
-| 24 | Web | ROGS branding, frog mascot, icon | DONE | BR-01, BR-02 |
-| 25 | Web | Core flows regression on the multi-market build (guest, buy/sell, TP/SL, abilities, chat, leaderboard, history) | DONE | Fix build 566d698, headless Chrome, returning guests 0 and 1. verify-fixes: guest ready, UI-10, UI-12 (x2), held position, UI-15 keeper settlement message, UI-16 frozen board, UI-01. flow: guest setup, UI-13 (x3), UI-22, UI-14. All PASS 07:06–07:20 UTC. Also verified: fresh-guest join, SOL buy + keeper settle, chat, WS-05/06, outage resilience, selector, proof, badges. Found and fixed: returning-guest setup stall |
-| 26 | Web | Lint clean | DONE | `bunx eslint .` 0 problems, tsc clean, 261 tests, build with no warnings |
-| 27 | Web | Zero console and network errors on the new build | DONE | UI-01 0 console errors and 0 failed requests across verify-fixes; markets-check consoleErrors [] and wsErrors []; Claude in Chrome 0 console messages on local production and on the live Vercel site; ws-chat errors [] |
-| 28 | Web | Price chart labels readable | DONE | Plot starts below the label; final-1440-btc-top.png / final-1440-doge-top.png reviewed |
-| 29 | Web | Usable mobile layout | DONE | Stacked single column below 768 px; headless 390 px: no overflow, bottom-sheet selector, SOL switch, 0 errors |
-| 30 | Web | Badge Magic Action and commit receipts reachable in the UI | DONE | MG-09: two saves from the badges panel, Solana txs ran RecordBadges, record tracks the new trade |
-| 31 | Deploy | Current frontend live on Vercel | DONE | https://rogs-arena-app.vercel.app serves the fix build 566d698 (deployment c43s0zrrh, READY). Railway CORS allows the origin, and the WebSocket accepts it. Live page: 0 console errors, all requests 200. A returning guest joined on production in 4 s. GitHub main pushed to 566d698 |
-| 32 | Docs | Test plan, API contract, brand prompts | DONE | docs/TEST-PLAN.md, docs/ARENA-API.md, docs/brand/PROMPTS.md |
-| 33 | Docs | MagicBlock audit with the ranked 50 | DONE | docs/MAGICBLOCK-AUDIT.md (refreshed) |
+| 1 | Entry | Guest wallet funded by a real faucet transfer | PASS | Live site: SIGNING IN → FUNDING SOL → JOINING ROLLUP → CREATING SESSION in 6 s |
+| 2 | Entry | Wallet connect through Wallet Standard (the Phantom path) | PASS | Rogs Demo Wallet run: real sign-in signature, delegation and session transactions (TEST-PLAN Run 5, same build as deployed) |
+| 3 | Chain | Player delegated to the ER | PASS | E2E: P1/P2 init+delegate |
+| 4 | Chain | Gum session key | PASS | E2E: session keys; live trades signed by the session key |
+| 5 | Chain | Chips claimed on the ER | PASS | E2E: 250.000000 USD each |
+| 6 | Chain | MagicBlock crank rolls rounds for 9 markets | PASS | `check-markets`: ALL MARKETS PASSED; E2E "rolled 1s after end" |
+| 7 | Chain | Oracle strike and close read inside the ER | PASS | `check-markets`: oracle age 0 s; E2E strike/close |
+| 8 | Trade | Buy on the ER | PASS | Live: "Bought 23.7 YES for $5.00 in 209 ms on the MagicBlock ER." |
+| 9 | Trade | Sell (take profit / stop loss) | PASS | Live: "Sold 23.7 YES for $4.90 in 258 ms"; E2E sell half |
+| 10 | Trade | Settlement | PASS | Live keeper: "Settled 1 position: paid $10.31, P/L +$5.31."; E2E settle_player exact |
+| 11 | Ability | Double price bonus | PASS | `test-abilities`: bonus 4.184162 = expected |
+| 12 | Ability | Protect loss bonus | PASS | `test-abilities`: bonus 1.764191 = expected |
+| 13 | Ability | Calm pulse bonus (on-chain heart under 120, fresh) | PASS | E2E: bonus 10.000000, calmWins 1 |
+| 14 | Ability | Cheers through MagicBlock VRF | PASS | Live keeper payouts (`/api/cheers`: SOL, DOGE, SUI with recipients); `verify-fair-cheers` / `e2e-cheers-vrf` below |
+| 15 | Verify | Devnet E2E script | PASS | 20/20 (1 not exercised: Cheers lost that round) |
+| 16 | Heart | `report_heart` written on-chain | PASS | E2E: report_heart 80 bpm, position maxBpm 80 |
+| 17 | Heart | Real device → app bpm → on-chain | **NOT VERIFIED** | Bridge answers `present:false`; needs a steady fingertip reading |
+| 18 | Chain | Progression stats on-chain | PASS | E2E wins/losses/calmWins; live BadgeRecord "best streak 1" |
+| 19 | Chain | Commit player and arena to Solana | PASS | E2E: base layer shows committed state (balance 265.104930); keeper commit logs |
+| 20 | Chain | Undelegate and re-delegate | PASS | `verify-undelegate` re-run (see TEST-PLAN Run 7) |
+| 21 | MagicBlock | Magic Action writes badges on Solana | PASS | Live Save to Solana: Creating record → Committing → Waiting for Magic Action → Saved in 7 s |
+| 22 | MagicBlock | Commit receipts in the UI | PASS | "rollup tx · Solana tx" links shown |
+| 23 | Chain | Program guards | PASS | `test-guards`: ALL GUARDS PASSED (17) |
+| 24 | Chain | Market guards | PASS | `test-market-guards`: ALL MARKET GUARDS PASSED (6) |
+| 25 | Chain | Rust unit tests | PASS | `cargo test -p rogs-arena --lib`: 32 passed |
+| 26 | Social | Chart, oracle price, price history | PASS | Live BTC/SOL charts with history; logos loaded |
+| 27 | Social | Leaderboard | PASS | Live: 5 Rogbot positions |
+| 28 | Social | Chat, realtime and persisted | PASS | Live: message sent and shown; `verify-live-ws` persisted-message checks |
+| 29 | Social | Presence | PASS | Live: "6 traders" |
+| 30 | Service | Indexer persists to real MongoDB Atlas | PASS | Railway boot: mongo connected, backfill 0 failures; service tests on Atlas |
+| 31 | Service | Live REST API | PASS | `verify-live-api`: LIVE API PASSED |
+| 32 | Service | Live WebSocket | PASS | `verify-live-ws`: LIVE WS PASSED |
+| 33 | Web | Nine coins and selector | PASS | Live SOL switch: URL, title, logo, chart |
+| 34 | Web | Proof page | PASS | Live: 9 markets delegated, oracle 2–7 s old, all six sections, indexer live |
+| 35 | Web | Coin logos beside prices | PASS | Live: `/coins/*.svg` loaded (naturalWidth 24) |
+| 36 | Service | Service test suite | PASS | 88 pass, 0 fail |
+| 37 | Web | Typecheck, lint, tests | PASS | tsc clean, 0 lint problems, 272 pass |
+| 38 | Web | Mobile layout | PASS | Live at 375×812: no horizontal overflow, stacked layout |
+| 39 | Web | Zero console errors | PASS | Browser pane on the live app: no console messages across the flows |
+| 40 | Infra | Database healthy (no write storm) | PASS | Rounds writes 11/s (was 210/s); Railway sign-in nonce 0.42 s |
+| 41 | Honesty | Demo traders real and labelled | PASS | "Rogbot" wallets on Railway, real ER transactions |
+| 42 | Deploy | Program on devnet | PASS | Program-owned arenas and players read on devnet and the ER |
+| 43 | Deploy | Railway service | PASS | Deployment 92df291e SUCCESS; /health 200 |
+| 44 | Deploy | Vercel frontend | PASS | https://rogs-arena-app.vercel.app serves the current build |
+| 45 | Submission | Repo readable by judges and tagged | PASS | Public, anonymous 200; tag `blitz-v8-submission` |
+| 46 | Docs | README for Rogs Arena | PASS | Rewritten (9a202d8) |
+| 47 | Docs | Submission guide and video script | PASS | `docs/SUBMISSION.md`, `docs/DEMO-VIDEO.md` |
+| 48 | Docs | MagicBlock audit | PASS | `docs/MAGICBLOCK-AUDIT.md` |
+| 49 | Docs | Judge report | PASS | `docs/JUDGE-REPORT.md` |
+| 50 | Docs | Completion measurement current | PASS | This file |
 
-**Baseline: 18 of 33 verified = 55%.**
+**Final: 49/50 = 98%.**
 
-By area:
-- **On-chain and MagicBlock:** 11/14.
-- **Service:** 5/6.
-- **Web:** 0/10.
-- **Deploy and docs:** 2/3.
+The one item left is **#17: a real device's heart rate reaching the chain.**
+- **Already verified:** the code path is committed and tested (a2a3cae, 272 web tests), and the on-chain `report_heart` write is verified (#16).
+- **Not verified:** a physical reading. The CELL-4B bridge reports no present pulse until a finger rests steadily on the sensor.
+- **To close it:** keep a light, still fingertip on the sensor for about 20 seconds with the local site open and Wearable connected. The bpm should appear next to your name and be written on-chain.
 
-Web scores zero because it changed substantially (nine markets, selector, branding) and has not yet been re-verified in a browser.
+## Earlier measurement (superseded)
 
-## Progress log
-
-- **05:59 UTC — 20 of 33 = 61%.** Items #10 and #19 were re-verified on the current bytecode and the redeployed service.
-- **06:05 UTC — 21 of 33 = 64%.** Item #5: program guards 17/17 on the size-optimized upgrade #3 bytecode.
-- **06:09 UTC — 22 of 33 = 67%.** Item #8: keeper-driven Fair Cheers v2 on XRP (MG-07).
-- **06:24 UTC — 30 of 33 = 91%.** Items #21–#24 and #26–#30 were verified in the browser on the local production build and on-chain. Left: #25 (core-flow regression sweep), #27 (zero console and network errors across every flow), #31 (Vercel).
-- **06:58 UTC — still 30 of 33.** Vercel is no longer blocked: a fresh project built READY. The regression sweep found a returning-guest setup bug, now fixed and being re-verified live.
-- **07:03 UTC — 31 of 33 = 94%.** Item #31: the fresh Vercel project is live with the returning-guest fix and verified in the browser. Left: #25 and #27, which wait on the verify-fixes, flow and ws-browser re-runs against the fix build.
-- **07:21 UTC — 33 of 33 = 100% of the checklist.** The core-flow regression and zero-errors items are verified on the fix build. Still being added for the recording: coin logos, demo trading bots and chat, and deployment of the price-history release plus the new loading screen.
-- **08:41 UTC — recording readiness on localhost, still 33 of 33.** Nothing was deployed; the owner asked to finish on localhost first. Found and fixed:
-  - Coin logos next to every price stayed blank in background tabs (lazy loading).
-  - The traders count ignored the demo bots (no presence heartbeat).
-  - The Save to Solana row overlapped the traders count at every desktop size (`h-full` list).
-  - Re-verified on the rebuilt production build: guest buy, stop loss and keeper settlement from the UI, each confirmed on the MagicBlock ER; chat send and live chat; coin switch across 9 logos; Save to Solana Magic Action confirmed on Solana; flow and verify-fixes suites all PASS; 0 console errors.
-  - Five demo bots traded real ER transactions throughout: 236 buys, 58 exits, 45 settles, 0 failures.
-  - Details: TEST-PLAN.md Run 4.
+A 33-item checklist was measured at 05:55–07:21 UTC (baseline 55%, then 33/33). Since then the project gained coin logos, price history, demo traders, a real-wallet flow, the database write-storm fix and redeploys, the CELL-4B pulse bridge, and the submission docs. This file now measures all of that.

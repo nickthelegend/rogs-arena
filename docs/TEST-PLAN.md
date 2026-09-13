@@ -282,3 +282,23 @@ Stack: local service on :8787 (Mongo, indexer, price sampler; the Railway keeper
 |---|---|---|---|---|
 | Sign-in stuck on SIGNING IN (reported by the user) | The sign-in nonce took 17–37 s and /health returned 503. The shared Atlas cluster was running 228 updates/s, 191–314 of them on `rogs_arena.rounds` | `Indexer.syncArena` ran concurrently for the same market while slow writes were in flight. Every run saw stale change keys and rewrote the current round plus its history. Measured by pausing each writer (SIGSTOP): Railway ~160/s, local service ~48/s | `queueArenaSync`: one sync per market, with newer reads collapsed into the latest one. The live round is written only when its fields change (b6d8259). Deployed to Railway (deployment 92df291e, SUCCESS) | PASS. Local contribution 48/s → 0.7/s. After the Railway deploy: rounds 11/s and cluster updates 16.7/s; Mongo ping 177 ms. Railway nonce 0.42 s and /health 200 in 0.63 s; local nonce 0.2 s. Service suite 88/88 (the 4 real-Mongo timeouts during the storm now pass) |
 | Live site after deploying the web to Vercel (rogs-arena-app and rogs-arena, prebuilt) | — | — | — | PASS on https://rogs-arena-app.vercel.app. 0 console errors; coin logos loaded; all 9 Railway requests OK (slowest 592 ms). Guest setup, signing in through funding, rollup and session, took 6 s. "Bought 10.3 YES for $5.00 in 270 ms on the MagicBlock ER."; chat message shown; "6 traders" with the 5 Rogbots running against Railway |
+
+### Run 7 — full re-measurement for the completion report (2026-09-13 10:50–11:35 UTC)
+
+The first measurement found 43/50 = 86%; see `docs/COMPLETION.md` for the checklist and the gaps. This run re-measured the whole checklist after closing them.
+
+| Check | Result |
+|---|---|
+| `check-markets` | ALL MARKETS PASSED: 9 arenas delegated, feeds correct, oracle age 0 s, crank rolled within the round |
+| `e2e-devnet` | First run FAILED at Cheers (`CheersCandidatesIncomplete`, the script sent one candidate while Rogbots were active). After the fix (25ea4f0): **20/20 PASS**, including the Calm pulse bonus $10 with calmWins 1, commit_player visible on Solana, and the crank rolling 1 s after the end |
+| `verify-fair-cheers` | FAIR CHEERS PASSED: the curated list (P1 only, of 12 recent traders) is rejected; the complete list of 12 is accepted and the VRF callback paid 10 recipients 1 USD each |
+| `e2e-cheers-vrf` | VRF paid 11 of 15 candidates, but the check compared balances, which also moved with the Rogbots' own trades. It now checks the exact `cheers_received` counter; re-run below |
+| `verify-undelegate` | UNDELEGATE LIFECYCLE PASSED: the router reports delegated, then undelegated, then re-delegated with the balance intact |
+| `test-guards` / `test-market-guards` | ALL GUARDS PASSED (17) / ALL MARKET GUARDS PASSED (6), twice |
+| `test-abilities` | ABILITY BONUSES PASSED twice: Double and Protect paid exactly |
+| `cargo test -p rogs-arena --lib` | 32 passed, twice |
+| `verify-live-api` / `verify-live-ws` (Railway) | LIVE API PASSED / LIVE WS PASSED, twice |
+| Service tests (Atlas) | 88 pass, 0 fail |
+| Web tsc / eslint / tests | clean / 0 problems / 272 pass |
+| Live app (Browser pane) | Guest setup 6 s; "Bought 23.7 YES for $5.00 in 209 ms"; "Sold 23.7 YES for $4.90 in 258 ms"; keeper settlement "paid $10.31, P/L +$5.31"; chat shown; 6 traders; SOL switch with logo and history; Save to Solana in 7 s; proof page with 9 delegated markets and oracle 2–7 s old; 375 px layout without overflow; 0 console messages |
+| CELL-4B pulse bridge | Answers, but `present:false` all run: no fingertip on the sensor, so device → chain is not verified |

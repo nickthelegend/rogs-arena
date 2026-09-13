@@ -22,6 +22,7 @@ import {
   createSessionKey,
   ensurePlayerDelegated,
   explorerTxUrl,
+  fairCheersCandidates,
   fetchArena,
   fetchPlayer,
   keypairSigner,
@@ -108,18 +109,37 @@ async function main() {
   log(settled?.name === 'PositionSettled' && settled.data.cheers && p2After.cheersPending === 1, 'P2 settle marks Cheers pending', `profit ${settled?.name === 'PositionSettled' ? Number(settled.data.profit) / 1e6 : '?'} USD, cheers_pending ${p2After.cheersPending}`, settle.signature)
   await sendErTransaction(connections.er, [await ix.settlePlayer(p1.publicKey)], sessions[0].keypair)
 
-  const before = (await fetchPlayer(connections.er, p1.publicKey))!
-  const seed = crypto.getRandomValues(new Uint8Array(32))
-  const request = await sendErTransaction(connections.er, [await ix.requestCheers(p2.publicKey, p2.publicKey, [p1.publicKey], seed)], p2)
-  log(true, 'P2 request_cheers on the ephemeral VRF queue', 'candidate: P1', request.signature)
+  // Fair Cheers: every recent trader except the winner must be a candidate (the live arena has other traders too), so the
+  // set is read right before the request and re-read if a trade lands in between.
+  const snapshot = async () => {
+    const owners = fairCheersCandidates(await fetchArena(connections.er), p2.publicKey)
+    return { owners, before: await Promise.all(owners.map((owner) => fetchPlayer(connections.er, owner))) }
+  }
+  let candidates = await snapshot()
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const seed = crypto.getRandomValues(new Uint8Array(32))
+      const request = await sendErTransaction(connections.er, [await ix.requestCheers(p2.publicKey, p2.publicKey, candidates.owners, seed)], p2)
+      log(candidates.owners.some((owner) => owner.equals(p1.publicKey)), 'P2 request_cheers on the ephemeral VRF queue', `${candidates.owners.length} candidates (every recent trader except P2, incl. P1)`, request.signature)
+      break
+    } catch (error) {
+      if (attempt === 3 || !/Cheers candidate/.test(String(error))) throw error
+      candidates = await snapshot()
+    }
+  }
 
   const paid = await waitFor(async () => {
-    const [winner, candidate] = await Promise.all([fetchPlayer(connections.er, p2.publicKey), fetchPlayer(connections.er, p1.publicKey)])
-    return winner?.cheersInflight === 0 && candidate && candidate.cheersReceived > before.cheersReceived ? candidate : null
+    const [winner, ...after] = await Promise.all([fetchPlayer(connections.er, p2.publicKey), ...candidates.owners.map((owner) => fetchPlayer(connections.er, owner))])
+    const gains = after.map((player, index) => {
+      const previous = candidates.before[index]
+      // cheers_received, not balance: the candidates are live traders whose balances also move with their own trades.
+      return player && previous ? player.cheersReceived - previous.cheersReceived : 0n
+    })
+    return winner?.cheersInflight === 0 && winner.cheersPending === 0 && gains.some((gain) => gain > 0n) ? gains.filter((gain) => gain > 0n) : null
   }, { timeoutMs: 120_000, intervalMs: 1_500, label: 'the VRF callback' })
-  log(paid.balance - before.balance === CHEERS_AMOUNT, 'VRF callback paid Cheers', `P1 balance +${Number(paid.balance - before.balance) / 1e6} USD, cheers_received ${Number(paid.cheersReceived) / 1e6} USD`)
+  log(paid.every((gain) => gain === CHEERS_AMOUNT), 'VRF callback paid Cheers', `${paid.length} of ${candidates.owners.length} candidates received ${Number(CHEERS_AMOUNT) / 1e6} USD each`)
 
-  const signatures = await connections.er.getSignaturesForAddress(p1.publicKey === p1.publicKey ? (await import('../src/index')).playerPda(p1.publicKey) : p1.publicKey, { limit: 10 })
+  const signatures = await connections.er.getSignaturesForAddress((await import('../src/index')).playerPda(p2.publicKey), { limit: 10 })
   for (const { signature } of signatures) {
     const tx = await connections.er.getTransaction(signature, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 })
     const event = parseArenaEvents(tx?.meta?.logMessages ?? []).find((item) => item.name === 'CheersPaid')
